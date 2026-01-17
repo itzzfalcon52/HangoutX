@@ -1,0 +1,1 @@
+export const JWT_PASSWORD="supersecretjwtpassword_Hussain_5253";
