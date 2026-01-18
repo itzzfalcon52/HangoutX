@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import Navbar from "@/modules/home/components/Navbar";
 
 const ProfilePage = () => {
   const [user, setUser] = useState(null);
@@ -67,10 +68,11 @@ const ProfilePage = () => {
 
   return (
     <div className="min-h-screen bg-[#0b0f14] text-white p-6">
-      <div className="max-w-6xl mx-auto">
+      <Navbar/>
+      <div className="max-w-6xl mx-auto mt-12">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl md:text-5xl font-bold mb-2">
+          <h1 className="text-4xl md:text-5xl font-bold mb-2 ">
             Your <span className="text-cyan-400">Profile</span>
           </h1>
           <p className="text-gray-400">Manage your account and customize your avatar</p>

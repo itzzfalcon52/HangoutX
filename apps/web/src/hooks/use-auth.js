@@ -2,9 +2,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import axios from "axios";
+import {useRouter} from "next/navigation";
 
 export function useAuth() {
   const queryClient = useQueryClient();
+  const router=useRouter();
 
   
 
@@ -75,14 +77,17 @@ export function useAuth() {
   });
 
   const handleLogout = async () => {
-    await axios.post("http://localhost:3000/api/v1/logout", {}, {
-      withCredentials: true
-    });
-  
-    queryClient.setQueryData(["auth", "user"], null);
-    queryClient.removeQueries({ queryKey: ["auth", "user"] });
-  
-    toast.success("Logged out successfully.");
+    try {
+      await axios.post("http://localhost:3000/api/v1/logout", {}, { withCredentials: true });
+      toast.success("Logged out successfully.");
+    } catch (e) {
+      toast.error("Logout failed.");
+    } finally {
+      queryClient.setQueryData(["auth", "user"], null);
+      queryClient.removeQueries({ queryKey: ["auth", "user"] });
+      router.replace("/"); // or "/login"
+      router.refresh();    // ensure client state revalidates
+    }
   };
 
   

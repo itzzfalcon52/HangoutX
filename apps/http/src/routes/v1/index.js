@@ -156,6 +156,7 @@ router.get("/me", userMiddleware, async (req, res) => {
         id: true,
         username: true,
         role: true, // Only return necessary fields
+        avatarKey: true,
       },
     });
 
