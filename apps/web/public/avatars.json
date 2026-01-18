@@ -1,0 +1,16 @@
+{
+    "femaleAdventurer": {
+      "idle": ["/avatars/femaleAdventurer/idle.png"],
+      "walk": [
+        "/avatars/femaleAdventurer/walk0.png",
+        "/avatars/femaleAdventurer/walk1.png",
+        "/avatars/femaleAdventurer/walk2.png",
+        "/avatars/femaleAdventurer/walk3.png",
+        "/avatars/femaleAdventurer/walk4.png",
+        "/avatars/femaleAdventurer/walk5.png",
+        "/avatars/femaleAdventurer/walk6.png",
+        "/avatars/femaleAdventurer/walk7.png"
+      ]
+    }
+  }
+  

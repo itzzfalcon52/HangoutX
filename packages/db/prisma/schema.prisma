@@ -20,10 +20,10 @@ model User {
   id       String  @id @unique @default(cuid())
   username String  @unique
   password String
-  avatarId String?
+  avatarKey String?
   role     Role
   spaces   Space[]
-  avatar    Avatar? @relation(fields: [avatarId], references: [id])
+  
 }
 
 model Space {
@@ -76,12 +76,6 @@ model MapElements {
   element   Element @relation(fields: [elementId], references: [id])
 }
 
-model Avatar {
-  id       String  @id @unique @default(cuid())
-  imageUrl String?
-  name     String?
-  users    User[]
-}
 
 enum Role {
   Admin

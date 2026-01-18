@@ -46,20 +46,6 @@ router.put("/element/:elementId",adminMiddleware, (req, res) => {
     res.json({message: "Element updated"})
 })
 
-router.post("/avatar",adminMiddleware, async (req, res) => {
-    const parsedData = CreateAvatarSchema.safeParse(req.body)
-    if (!parsedData.success) {
-        res.status(400).json({message: "Validation failed"})
-        return
-    }
-    const avatar = await db.avatar.create({
-        data: {
-            name: parsedData.data.name,
-            imageUrl: parsedData.data.imageUrl
-        }
-    })
-    res.json({avatarId: avatar.id})
-})
 
 router.post("/map",adminMiddleware, async (req, res) => {
     const parsedData = CreateMapSchema.safeParse(req.body)

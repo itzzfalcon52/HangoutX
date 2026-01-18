@@ -144,14 +144,6 @@ router.get("/elements", async (req, res) => {
     }))})
 })
 
-router.get("/avatars", async (req, res) => {
-    const avatars = await db.avatar.findMany()
-    res.json({avatars: avatars.map(x => ({
-        id: x.id,
-        imageUrl: x.imageUrl,
-        name: x.name
-    }))})
-})
 
 router.get("/me", userMiddleware, async (req, res) => {
   try {
