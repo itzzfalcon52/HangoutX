@@ -1,5 +1,9 @@
 import express from 'express';
 import { adminMiddleware } from "../../middlewares/admin.js";
+import { userMiddleware } from "../../middlewares/user.js";
+import fs from "fs/promises";
+import path from "path";
+import sharp from "sharp";
 import { AddElementSchema, CreateAvatarSchema, CreateElementSchema, CreateMapSchema, UpdateElementSchema } from "../../types/index.js";
 import db from "@repo/db"
 
@@ -29,7 +33,7 @@ router.post("/element",adminMiddleware, async (req, res) => {
     })
 })
 
-router.put("/element/:elementId",adminMiddleware, (req, res) => {
+router.put("/element/:elementId",userMiddleware, (req, res) => {
     const parsedData = UpdateElementSchema.safeParse(req.body)
     if (!parsedData.success) {
         res.status(400).json({message: "Validation failed"})
@@ -74,6 +78,69 @@ router.post("/map",adminMiddleware, async (req, res) => {
     })
 })
 
+router.post("/admin/map/upload", async (req, res) => {
+    const { name, width, height, tilemapJson, thumbnail } = req.body;
+  
+    const map = await db.map.create({
+      data: {
+        name,
+        width,
+        height,
+        tilemapJson,
+        thumbnail
+      }
+    });
+  
+    res.json({ mapId: map.id });
+  });
+
+  router.post("/elements/import", userMiddleware, async (req, res) => {
+    try {
+      const { folder = "/elements", static: isStatic = true } = req.body ?? {};
+  
+      const publicDir = path.join(process.cwd(), "..", "web", "public");
+      const absFolder = path.join(publicDir, folder);
+  
+      const entries = await fs.readdir(absFolder, { withFileTypes: true });
+      const pngFiles = entries
+        .filter((e) => e.isFile() && e.name.toLowerCase().endsWith(".png"))
+        .map((e) => e.name);
+  
+      if (pngFiles.length === 0) {
+        return res.status(400).json({ message: "No PNG files found in folder", folder });
+      }
+  
+      const results = [];
+      for (const fileName of pngFiles) {
+        const imageUrl = path.posix.join(folder, fileName); // /elements/a.png
+        const absFile = path.join(publicDir, imageUrl);
+  
+        const meta = await sharp(absFile).metadata();
+        const width = meta.width ?? 0;
+        const height = meta.height ?? 0;
+  
+        // Upsert by imageUrl (needs @@unique on imageUrl OR use findFirst+update/create)
+        const existing = await db.element.findFirst({ where: { imageUrl } });
+  
+        const element = existing
+          ? await db.element.update({
+              where: { id: existing.id },
+              data: { width, height, static: isStatic },
+            })
+          : await db.element.create({
+              data: { width, height, static: isStatic, imageUrl },
+            });
+  
+        results.push({ id: element.id, imageUrl: element.imageUrl, width: element.width, height: element.height });
+      }
+  
+      res.json({ success: true, count: results.length, elements: results });
+    } catch (e) {
+      console.error("elements/import failed:", e);
+      res.status(500).json({ message: "Failed to import elements" });
+    }
+  });
+  
 
 
 export default router;

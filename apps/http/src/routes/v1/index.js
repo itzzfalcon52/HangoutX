@@ -45,6 +45,7 @@ const signToken = (id,role) => {
   
     // Secure cookie only in production (HTTPS only)
     if (process.env.NODE_ENV === "production") cookieOptions.secure = true; //pn;y true in production
+    console.log(token);
   
     // Attach JWT as cookie
     res.cookie("jwt", token, cookieOptions);

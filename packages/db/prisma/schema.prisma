@@ -64,6 +64,7 @@ model Map {
   name   String
   thumbnail String
   mapElements MapElements[]
+  tilemapJson Json 
 }
 
 model MapElements {

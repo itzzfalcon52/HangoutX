@@ -64,9 +64,11 @@ export function useAuth() {
         username,
         password,
       },{withCredentials:true});
+      console.log(response.data);
       return response.data; //login returns a token 
     },
     onSuccess: async (token) => {
+      console.log(token);
       toast.success("Login successful!");
       queryClient.invalidateQueries({ queryKey: ["auth", "user"] }); // Refetch user data
     },

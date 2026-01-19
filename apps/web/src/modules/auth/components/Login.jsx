@@ -17,6 +17,7 @@ const Login = () => {
 
   // Handle form submission
   const onSubmit = (data) => {
+    console.log(data);
     handleLogin.mutate(data, {
       onSuccess: () => {
         console.log("Login successful!");
