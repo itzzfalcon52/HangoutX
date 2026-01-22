@@ -6,8 +6,10 @@ import Navbar from "@/modules/home/components/Navbar";
 import { useSpaces } from "@/hooks/use-spaces";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useRequireAuth } from "@/hooks/use-protected-auth";
 
 export default function SpacesPage() {
+  useRequireAuth();
   const { data: spaces = [], isLoading, isError } = useSpaces();
 
   return (

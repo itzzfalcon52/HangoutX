@@ -184,8 +184,8 @@ router.get("/me", userMiddleware, async (req, res) => {
 router.post("/logout", (req, res) => {
   res.clearCookie("jwt", {
     httpOnly: true,
-    sameSite: "Strict",
-    secure: process.env.NODE_ENV === "production",
+    sameSite: "none",
+    secure: true,
     path: "/"
   });
 

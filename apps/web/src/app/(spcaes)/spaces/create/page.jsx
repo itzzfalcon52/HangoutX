@@ -8,8 +8,10 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { useRequireAuth } from "@/hooks/use-protected-auth";
 
 export default function CreateSpacePage() {
+  useRequireAuth();
   const router = useRouter();
   const { data: maps = [], isLoading } = useMaps();
   const createSpace = useCreateSpace();

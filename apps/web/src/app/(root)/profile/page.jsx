@@ -3,8 +3,10 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import Navbar from "@/modules/home/components/Navbar";
+import { useRequireAuth } from "@/hooks/use-protected-auth";
 
 const ProfilePage = () => {
+  useRequireAuth();
   const [user, setUser] = useState(null);
   const [avatars, setAvatars] = useState([]);
   const [selectedAvatar, setSelectedAvatar] = useState("");

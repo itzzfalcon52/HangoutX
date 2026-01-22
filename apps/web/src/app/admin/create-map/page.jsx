@@ -7,6 +7,7 @@ import Navbar from "@/modules/home/components/Navbar";
 import { createGame, destroyGame } from "@/modules/mapEditor/game-Logic/CreateGame";
 import { useElements,useImportElements } from "@/hooks/use-elements";
 import {useMaps,useCreateMap,useUpdateMapElements} from "@/hooks/use-maps";
+import { useRequireAuth } from "@/hooks/use-protected-auth";
 
 function validatePlacements({ placements, mapData, tileSize }) {
   const errors = [];
@@ -58,6 +59,7 @@ function validatePlacements({ placements, mapData, tileSize }) {
 }
 
 export default function AdminMapEditorPage() {
+  useRequireAuth();
   const router = useRouter();
 
   const [placements, setPlacements] = useState([]);

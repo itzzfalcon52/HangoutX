@@ -3,8 +3,10 @@ import React from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import Navbar from "@/modules/home/components/Navbar";
+import { useRequireAuth } from "@/hooks/use-protected-auth";
 
 export default function ConfirmJoinPage() {
+  useRequireAuth();
   const router = useRouter();
   const params = useParams();
   const spaceId = params?.spaceId;

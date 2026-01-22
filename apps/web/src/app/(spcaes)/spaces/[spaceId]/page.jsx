@@ -8,8 +8,10 @@ import useWorldSocket from "@/hooks/use-world-socket";
 import useMovement from "@/hooks/use-movement";
 import PhaserWorld from "@/modules/world/components/PhaserWorld";
 import axios from "axios";
+import { useRequireAuth } from "@/hooks/use-protected-auth";
 
 export default function SpaceView() {
+  useRequireAuth();
   const params = useParams();
   const spaceId = params?.spaceId;
   const [token, setToken] = useState("");

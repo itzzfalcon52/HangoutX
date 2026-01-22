@@ -6,8 +6,10 @@ import Navbar from "@/modules/home/components/Navbar";
 import { useMaps } from "@/hooks/use-maps";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { useRequireAuth } from "@/hooks/use-protected-auth";
 
 export default function AdminMapsPage() {
+  useRequireAuth();
   const { data: maps = [], isLoading, isError, error } = useMaps();
 
   return (
