@@ -10,7 +10,7 @@ const app = express();
 app.use(cookieParser());
 
 app.use(cors({
-  origin: "http://localhost:3002",   // frontend origin
+  origin: "https://metaverse-repo-web-xqc5.vercel.app/",   // frontend origin
   credentials: true                  // allow cookies
 }));
 
