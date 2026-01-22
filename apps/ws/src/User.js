@@ -8,7 +8,7 @@ import db from "@repo/db"
 // Importing JSON Web Token library for verifying and decoding tokens
 import jwt from "jsonwebtoken";
 // Importing the JWT password/secret from the configuration file
-import {JWT_PASSWORD} from "./config.js"
+
 // Function to generate a random string of a given length
 // Used to create unique IDs for users
 function getRandomString(length) {
@@ -69,7 +69,7 @@ const STEP = 32;
                     // Verifying the token and extracting the user ID
                     let userId;
                     try {
-                        userId = jwt.verify(token, JWT_PASSWORD).userId;
+                        userId = jwt.verify(token, process.env.JWT_PASSWORD).userId;
                     } catch (e) {
                         try { this.ws.close(); } catch {}
                         return;
