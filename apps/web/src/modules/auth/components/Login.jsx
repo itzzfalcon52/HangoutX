@@ -4,11 +4,14 @@ import React from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { useForm } from "react-hook-form";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const Login = () => {
   const { handleLogin, isSignedIn } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const next = searchParams?.get("next") || "/spaces"; // ✅ preserve deep-link target (fallback to /spaces)
+
   const {
     register,
     handleSubmit,
@@ -21,7 +24,8 @@ const Login = () => {
     handleLogin.mutate(data, {
       onSuccess: () => {
         console.log("Login successful!");
-        router.push("/spaces");
+        // ✅ redirect back to the invite/space using `next`
+        router.replace(next);
       },
       onError: (error) => {
         console.error("Login failed:", error);
@@ -31,6 +35,10 @@ const Login = () => {
 
   // If user is already signed in, show a message
   if (isSignedIn) {
+    // ✅ already signed-in: go directly to `next` deep-link
+    // (keeps your existing UI; if you prefer silent redirect, uncomment the line below)
+    // router.replace(next);
+
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-[#0b0f14]">
         <div className="bg-[#151a21] border border-gray-800 p-8 rounded-lg shadow-lg w-full max-w-md text-center">
@@ -62,6 +70,12 @@ const Login = () => {
               className="block w-full px-4 py-3 bg-cyan-500 hover:bg-cyan-600 text-white font-medium rounded-lg transition-all duration-300"
             >
               Go to Profile
+            </Link>
+            <Link
+              href={next} // ✅ offer direct navigation to the deep-link space
+              className="block w-full px-4 py-3 bg-transparent border-2 border-cyan-500 hover:bg-cyan-500/10 text-cyan-400 font-medium rounded-lg transition-all duration-300"
+            >
+              Continue to Space
             </Link>
             <Link
               href="/spaces"
@@ -156,7 +170,7 @@ const Login = () => {
                   <path
                     className="opacity-75"
                     fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    d="M4 12a 8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                   />
                 </svg>
                 Logging in...
@@ -185,6 +199,13 @@ const Login = () => {
           >
             Create an Account
           </Link>
+        </div>
+
+        {/* Optional helper: show where you'll go after login */}
+        <div className="text-center mt-4">
+          <p className="text-xs text-gray-500">
+            You will be redirected to: <span className="text-cyan-400">{next}</span>
+          </p>
         </div>
       </div>
     </div>
