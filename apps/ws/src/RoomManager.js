@@ -49,6 +49,12 @@ class RoomManager {
       );
   }
 
+  hasUserId(spaceId, userId) {
+    const list = this.rooms.get(spaceId) || [];
+    return list.some((u) => u.userId === userId);
+  }
+  
+
   // Method to broadcast a message to all users in a specific room (space), except the sender.
   // `message` is the data to be sent to the users.
   // `user` is the sender of the message (excluded from receiving the broadcast).

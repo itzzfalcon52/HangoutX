@@ -20,7 +20,11 @@ export default function useWorldSocket(spaceID, token) {
   useEffect(() => {
     console.log("🧪 WS INIT", { spaceID, token });
 
-    if (!spaceID || !token) return;
+    if (!spaceID ) return;
+    if (!token) {
+      toast.error("Missing auth token. Please log in.");
+      return;
+    }
 
     const socket = connectSocket(token);
     window.__ws = socket;
@@ -42,6 +46,18 @@ export default function useWorldSocket(spaceID, token) {
 
           window.__canMove = true;
           toast.success("Joined space");
+          break;
+        }
+
+        case "join-rejected": {
+          const reason = message.payload?.reason;
+          toast.error(
+            reason === "already-in-space"
+              ? "You are already in this space from another session."
+              : "Join rejected."
+          );
+          try { socket.close(); } catch {}
+          window.__canMove = false;
           break;
         }
 

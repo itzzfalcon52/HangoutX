@@ -1,3 +1,5 @@
+// ...existing code...
+// filepath: /Users/hussain/Desktop/web dev projects/metaverse-app/metaverse-repo/apps/ws/src/User.js
 // Importing WebSocket library for handling WebSocket connections
 import WebSocket from "ws";
 // Importing RoomManager to manage users and rooms
@@ -114,6 +116,20 @@ const STEP = 32;
 
                     // Assigning the space ID to this user instance
                     this.spaceId = spaceId;
+
+                    // ✅ Prevent duplicate joins by same authenticated user in the same space
+                    {
+                      const rm = RoomManager.getInstance();
+                      if (rm.hasUserId(spaceId, this.userId)) {
+                        // Inform client and close this new connection
+                        this.send({
+                          type: "join-rejected",
+                          payload: { reason: "already-in-space" }
+                        });
+                        try { this.ws.close(); } catch {}
+                        return;
+                      }
+                    }
 
                     // Adding the user to the room in RoomManager
                     RoomManager.getInstance().addUser(spaceId, this);
@@ -291,3 +307,4 @@ export default User;
 // 7. **Error Handling**:
 //    - Close the WebSocket connection if invalid data is received (e.g., invalid token).
 //    - Log errors or unexpected behavior for debugging.
+// ...existing code...
