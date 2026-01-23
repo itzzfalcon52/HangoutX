@@ -1,320 +1,239 @@
 // JSX
-// filepath: /Users/hussain/Desktop/web dev projects/metaverse-app/metaverse-repo/apps/web/src/app/admin/create-map/page.jsx
+// filepath: /Users/hussain/Desktop/web dev projects/metaverse-app/metaverse-repo/apps/web/src/app/spaces/[spaceId]/page.jsx
 // ...existing code...
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-import { useRouter } from "next/navigation";
-import Navbar from "@/modules/home/components/Navbar";
-import { createGame, destroyGame } from "@/modules/mapEditor/game-Logic/CreateGame";
-import { useElements,useImportElements } from "@/hooks/use-elements";
-import {useMaps,useCreateMap,useUpdateMapElements} from "@/hooks/use-maps";
+import React, { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+import useWorldSocket from "@/hooks/use-world-socket";
+import useMovement from "@/hooks/use-movement";
+import PhaserWorld from "@/modules/world/components/PhaserWorld";
+import axios from "axios";
 import { useRequireAuth } from "@/hooks/use-protected-auth";
 
 /**
- * validatePlacements:
- * - Pure validation utility, unchanged logic.
- * - Confirms mapData exists, checks bounds, grid snapping, and element sizes against the map size and offset.
+ * SpaceView:
+ * - Full-screen world rendering with Phaser.
+ * - WebSocket connection for presence and chat.
+ * - Keyboard movement handling.
+ * - Chat drawer overlay (hidden by default, slides over the map on demand).
+ * 
+ * All previous logic is preserved; only layout/styling and comments are enhanced.
  */
-function validatePlacements({ placements, mapData, tileSize }) {
-  const errors = [];
-
-  if (!mapData) {
-    return { ok: false, errors: ["Map data missing (data.json not loaded)."] };
-  }
-
-  const offsetX = mapData.x ?? 0;
-  const offsetY = mapData.y ?? 0;
-  const mapW = mapData.width ?? 0;
-  const mapH = mapData.height ?? 0;
-
-  if (!Number.isFinite(mapW) || !Number.isFinite(mapH) || mapW <= 0 || mapH <= 0) {
-    return { ok: false, errors: ["Invalid map width/height in data.json."] };
-  }
-
-  for (let i = 0; i < placements.length; i++) {
-    const p = placements[i];
-
-    if (!p?.elementId) errors.push(`Placement #${i + 1}: missing elementId`);
-    if (!Number.isFinite(p?.x) || !Number.isFinite(p?.y)) errors.push(`Placement #${i + 1}: invalid x/y`);
-
-    // snapped-to-grid check (relative to map offset)
-    const relX = p.x - offsetX;
-    const relY = p.y - offsetY;
-    const snappedX = relX % tileSize === 0;
-    const snappedY = relY % tileSize === 0;
-    if (!snappedX || !snappedY) {
-      errors.push(`Placement #${i + 1}: not snapped to ${tileSize}px grid`);
-    }
-
-    // bounds check (uses element width/height if present; defaults to 0)
-    const w = Number.isFinite(p?.width) ? p.width : 0;
-    const h = Number.isFinite(p?.height) ? p.height : 0;
-
-    const inside =
-      p.x >= offsetX &&
-      p.y >= offsetY &&
-      p.x + w <= offsetX + mapW &&
-      p.y + h <= offsetY + mapH;
-
-    if (!inside) {
-      errors.push(`Placement #${i + 1}: outside map bounds`);
-    }
-  }
-
-  return { ok: errors.length === 0, errors };
-}
-
-export default function AdminMapEditorPage() {
-  /**
-   * Auth guard: ensures only authenticated users can access this page.
-   * Unchanged logic; it may redirect or throw based on your hook implementation.
-   */
+export default function SpaceView() {
+  // 1) Protect the route with auth (unchanged)
   useRequireAuth();
 
-  const router = useRouter();
+  // 2) Read dynamic spaceId from URL
+  const params = useParams();
+  const spaceId = params?.spaceId;
 
-  // placements: current set of placed elements in the editor (controlled by CreateGame)
-  const [placements, setPlacements] = useState([]);
-  // saving: global UI state for disabling actions while saving
-  const [saving, setSaving] = useState(false);
-  // mapName: user-provided name for the map
-  const [mapName, setMapName] = useState("");
-
-  // mutations & queries: import elements, list elements, create map, update placements
-  const importMutation = useImportElements();
-  const { data: elements = [], isLoading, isError } = useElements();
-  const createMapMutation = useCreateMap();
-  const updateMapElementsMutation = useUpdateMapElements();
-
-  // static editor config: base map and tile size
-  const mapKey = "map1";
-  const tileSize = 32;
-
-  // thumbnail: recommended preview image for the map (composite)
-  const thumbnail = useMemo(() => `/${mapKey}/thumbnail.png`, [mapKey]);
-
-  /**
-   * Boot the Phaser editor game:
-   * - createGame mounts the Phaser instance into #game-container.
-   * - onPlacementsChanged updates React state on interactions.
-   * - destroyGame cleans up on component unmount.
-   */
+  // 3) JWT for WS auth, loaded from localStorage
+  const [token, setToken] = useState("");
   useEffect(() => {
-    createGame({ mapKey, tileSize, onPlacementsChanged: setPlacements });
-    return () => destroyGame();
+    const t = localStorage.getItem("jwt");
+    console.log("🔐 Loaded token from localStorage:", t);
+    if (t) setToken(t);
   }, []);
 
-  /**
-   * Toast on error while loading available elements.
-   */
+  // 4) Connect WS to backend (presence, movement, chat). Logic unchanged.
+  useWorldSocket(spaceId, token);
+
+  // 5) Enable keyboard movement and emit 'move' events over WS. Logic unchanged.
+  useMovement();
+
+  // 6) UI State: chat drawer visibility (hidden initially), chat buffer, input
+  const [chatOpen, setChatOpen] = useState(false); // start hidden
+  const [chatLog, setChatLog] = useState([]);
+  const [input, setInput] = useState("");
+
+  // 7) World data load state
+  const [world, setWorld] = useState(null);
+  const [loadingWorld, setLoadingWorld] = useState(true);
+
+  // 8) Fetch world (map + elements) via HTTP. Logic preserved.
   useEffect(() => {
-    if (isError) toast.error("Failed to load elements");
-  }, [isError]);
+    if (!spaceId) return;
+    setLoadingWorld(true);
 
-  /**
-   * Import elements from public folder:
-   * - This populates the palette with static images from /public/elements.
-   */
-  const importFromPublic = () => {
-    importMutation.mutate(
-      { folder: "/elements", static: true },
-      {
-        onSuccess: (data) => toast.success(`Imported ${data?.count ?? 0} elements`),
-        onError: (e) => toast.error(e?.response?.data?.message || "Import failed"),
-      }
-    );
-  };
-
-  /**
-   * Drag start:
-   * - Emits a custom event to Phaser with element details to begin drag placement.
-   */
-  const dragStart = (el) => {
-    window.dispatchEvent(
-      new CustomEvent("editor:dragstart", {
-        detail: { elementId: el.id, imageUrl: el.imageUrl, width: el.width, height: el.height },
+    axios
+      .get(`${process.env.NEXT_PUBLIC_HHTP_URL}/api/v1/space/${spaceId}/world`, {
+        withCredentials: true,
       })
-    );
+      .then((res) => {
+        setWorld(res.data);
+        setLoadingWorld(false);
+      })
+      .catch((err) => {
+        console.error("Failed to load world:", err);
+        setLoadingWorld(false);
+      });
+  }, [spaceId, token]);
+
+  // 9) Chat WS listener (append messages to chatLog). Logic preserved.
+  useEffect(() => {
+    const ws = typeof window !== "undefined" ? window.__ws : null;
+    if (!ws) return;
+
+    const onMessage = (evt) => {
+      try {
+        const msg = JSON.parse(evt.data);
+        if (msg.type === "chat") {
+          const { userId, message, ts } = msg.payload || {};
+          setChatLog((prev) => [...prev, { userId, message, ts }]);
+        }
+      } catch {
+        // non-chat messages or parse issues are ignored
+      }
+    };
+
+    ws.addEventListener("message", onMessage);
+    return () => ws.removeEventListener("message", onMessage);
+  }, [spaceId, token]);
+
+  // 10) Send chat over WS if open and text present. Logic preserved.
+  const sendChat = () => {
+    const ws = window?.__ws;
+    const text = input.trim();
+    if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+    ws.send(JSON.stringify({ type: "chat", payload: { message: text } }));
+    setInput("");
   };
 
-  /**
-   * Drag end:
-   * - Signals Phaser the drag action has ended.
-   */
-  const dragEnd = () => window.dispatchEvent(new CustomEvent("editor:dragend"));
-
-  /**
-   * Save and continue:
-   * - Loads map JSON.
-   * - Validates placements (grid snapping + bounds).
-   * - Creates the map and persists placements.
-   * - Navigates to /admin/maps on success.
-   * Logic unchanged; only comments added.
-   */
-  const saveAndContinue = async () => {
-    if (!mapName.trim()) return toast.error("Map name is required");
-    if (!placements.length) return toast.error("Place at least one element before saving");
-
-    setSaving(true);
+  // 11) Share button: copy invite URL to clipboard. Logic preserved.
+  const [copied, setCopied] = useState(false);
+  const inviteUrl =
+    typeof window !== "undefined" ? `${window.location.origin}/spaces/${spaceId}` : "";
+  const copyInvite = async () => {
+    if (!inviteUrl) return;
     try {
-      // 1) Load base map json (your format)
-      const res = await fetch(`/${mapKey}/data.json`, { cache: "no-store" });
-      if (!res.ok) throw new Error(`Failed to load /${mapKey}/data.json`);
-      const mapData = await res.json();
-      console.log("Loaded mapData:", mapData);
-
-      // 2) Validate placements against map bounds + grid
-      const validation = validatePlacements({ placements, mapData, tileSize });
-      if (!validation.ok) {
-        // show first few errors to avoid spamming toasts
-        const sample = validation.errors.slice(0, 3).join(" | ");
-        toast.error(`Fix placements: ${sample}${validation.errors.length > 3 ? ` (+${validation.errors.length - 3} more)` : ""}`);
-        return;
-      }
-
-      // 3) Create map in DB (Map model) using your upload endpoint
-      const created = await createMapMutation.mutateAsync({
-        name: mapName.trim(),
-        width: mapData.width,
-        height: mapData.height,
-        tilemapJson: mapData, // stores the full JSON into Map.tilemapJson (Json column)
-        thumbnail:`/${mapKey}/_composite.png`,
-      });
-
-      const mapId = created?.mapId;
-      if (!mapId) throw new Error("Create map did not return mapId");
-
-      // 4) Save placements in DB (MapElements) using your endpoint
-      await updateMapElementsMutation.mutateAsync({ mapId, placements });
-
-      toast.success("Map saved");
-      router.push("/admin/maps");
+      await navigator.clipboard.writeText(inviteUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
     } catch (e) {
-      toast.error(e?.response?.data?.message || e?.message || "Save failed");
-    } finally {
-      setSaving(false);
+      console.warn("Failed to copy invite URL:", e);
     }
   };
 
-  // busy: global pending state to disable buttons while any mutation runs
-  const busy = saving || importMutation.isPending || createMapMutation.isPending || updateMapElementsMutation.isPending;
-
+  /**
+   * Render:
+   * - Full-screen container (fixed inset-0) so the map occupies the entire viewport.
+   * - Overlay controls and space ID indicators rendered above the map (absolute).
+   * - Chat drawer is hidden initially; when opened it overlays on top of the map (absolute, z-40).
+   */
   return (
-    /**
-     * Root page container:
-     * - min-h-screen ensures full viewport height.
-     * - We keep a dark background and white text.
-     */
-    <div className="min-h-screen bg-[#0b0f14] text-white">
-      {/**
-       * Navbar remains at top; the editor region below will fill remaining viewport height.
-       */}
-      <Navbar />
-
-      {/**
-       * Main content row:
-       * - Use flex with a fixed-width sidebar and a flexible editor grid.
-       * - max-w-7xl and mx-auto center the layout on large screens.
-       * - We ensure the inner row consumes the available viewport height using min-h-[calc(100vh-...)]
-       *   If Navbar height changes, you can replace 64px with your actual navbar height.
-       */}
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="flex gap-6 min-h-[calc(100vh-64px-64px)]">
-          {/**
-           * Elements sidebar:
-           * - Fixed width.
-           * - Scrollable if content exceeds viewport height (overflow-y-auto).
-           * - No logic changes; only layout tweaks to ensure full-height next to the grid.
-           */}
-          <aside className="w-[360px] bg-[#151a21] border border-gray-800 rounded-xl p-4 overflow-y-auto">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold">
-                Elements <span className="text-cyan-400">Palette</span>
-              </h2>
-
-              <button
-                onClick={importFromPublic}
-                disabled={busy}
-                className={`text-xs px-3 py-2 rounded-md border transition ${
-                  busy
-                    ? "border-gray-700 text-gray-400 cursor-not-allowed"
-                    : "border-cyan-500 text-cyan-400 hover:bg-cyan-500/10"
-                }`}
-              >
-                {importMutation.isPending ? "Importing..." : "Import"}
-              </button>
-            </div>
-
-            <label className="block text-sm text-gray-300 mb-2">Map Name</label>
-            <input
-              value={mapName}
-              onChange={(e) => setMapName(e.target.value)}
-              placeholder="e.g. Level 0"
-              className="w-full mb-4 px-3 py-2 rounded-md bg-[#0b0f14] border border-gray-800 outline-none focus:border-cyan-500"
-            />
-
-            {isLoading ? (
-              <div className="text-sm text-gray-400">Loading elements...</div>
-            ) : (
-              <div className="grid grid-cols-3 gap-3">
-                {elements.map((el) => (
-                  <div
-                    key={el.id}
-                    onMouseDown={() => dragStart(el)}
-                    onMouseUp={dragEnd}
-                    className="bg-[#0b0f14] border border-gray-800 hover:border-cyan-500/60 rounded-lg p-2 cursor-grab active:cursor-grabbing transition"
-                  >
-                    <img src={el.imageUrl} alt="" className="w-full h-14 object-contain" draggable={false} />
-                    <div className="mt-2 text-[10px] text-gray-400 truncate">
-                      {el.width}×{el.height}
-                    </div>
-                  </div>
-                ))}
-              </div>
+    <div className="fixed inset-0 bg-[#0b0f14] text-white overflow-hidden">
+      {/* World fills full screen */}
+      <main className="absolute inset-0">
+        {/* Controls (top-left) overlay above map */}
+        <div className="absolute top-3 left-3 z-30 flex gap-2">
+          <Button
+            variant="outline"
+            className="border-gray-700 text-gray-300 hover:bg-[#0f141b] hover:text-white transition-colors"
+            onClick={() => setChatOpen((o) => !o)}
+          >
+            {chatOpen ? "Hide Chat" : "Show Chat"}
+          </Button>
+          <Button
+            variant="outline"
+            className={cn(
+              "border-gray-700 transition-colors",
+              copied
+                ? "bg-green-600/20 text-green-300 hover:bg-green-600/30"
+                : "bg-[#0f141b] text-gray-300 hover:bg-[#121821] hover:text-white"
             )}
-
-            <button
-              onClick={saveAndContinue}
-              disabled={busy}
-              className={`mt-6 w-full py-3 rounded-lg font-semibold transition ${
-                busy ? "bg-gray-700 cursor-not-allowed" : "bg-cyan-500 hover:bg-cyan-600"
-              }`}
-            >
-              {busy ? "Saving..." : `Save & Continue (${placements.length})`}
-            </button>
-          </aside>
-
-          {/**
-           * Editor grid container:
-           * - flex-1: takes remaining width beside the sidebar.
-           * - Make it full available height with min-h-0 and a child that fills 100%.
-           * - overflow-hidden keeps the game canvas clean inside rounded borders.
-           */}
-          <main className="flex-1 bg-[#151a21] border border-gray-800 rounded-xl overflow-hidden flex flex-col min-h-0">
-            {/**
-             * Header bar inside editor:
-             * - Stays at top of the editor panel.
-             */}
-            <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
-              <div className="font-semibold">
-                Map Editor: <span className="text-cyan-400">{mapKey}</span>
-              </div>
-              <div className="text-xs text-gray-400">Grid {tileSize}px</div>
-            </div>
-
-            {/**
-             * Editor canvas area:
-             * - flex-1 ensures it consumes all remaining vertical space of the editor panel.
-             * - #game-container is set to w-full h-full so Phaser can size the canvas to fill it.
-             */}
-            <div className="p-3 flex-1 min-h-0">
-              <div id="game-container" className="w-full h-full rounded-lg border border-gray-800 overflow-hidden" />
-            </div>
-          </main>
+            onClick={copyInvite}
+            title={inviteUrl}
+          >
+            <span className="mr-2">🔗</span>
+            {copied ? "Copied!" : "Share"}
+          </Button>
         </div>
-      </div>
+
+        {/* Space ID overlay (top-right) */}
+        <div className="absolute top-3 right-3 z-30">
+          <div className="px-3 py-2 rounded-md bg-[#0f141b] border border-gray-800 text-gray-300 text-sm shadow">
+            Space ID: <span className="text-cyan-400">{spaceId}</span>
+          </div>
+        </div>
+
+        {/* Phaser world canvas covers the entire screen */}
+        <div className="absolute inset-0">
+          {loadingWorld && (
+            <div className="w-full h-full flex items-center justify-center">
+              <div className="flex flex-col items-center gap-3">
+                <div className="h-8 w-8 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin" />
+                <div className="text-gray-400">Loading world...</div>
+              </div>
+            </div>
+          )}
+
+          {/* Render the world when available; preserves prior logic */}
+          {!loadingWorld && world && <PhaserWorld map={world} />}
+
+          {/* Error state when world fails to load */}
+          {!loadingWorld && !world && (
+            <div className="w-full h-full flex items-center justify-center">
+              <div className="px-4 py-2 rounded-md bg-[#1a2029] border border-red-600/40 text-red-300">
+                Failed to load world
+              </div>
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* Chat drawer overlay:
+         - Hidden initially (translate-x fully off-screen).
+         - Slides in over the map when chatOpen=true.
+         - Absolute positioning with full height and a fixed width.
+         - z-40 ensures it sits on top of the map canvas and controls. */}
+      <aside
+        className={cn(
+          "absolute top-0 right-0 h-full w-[360px] bg-[#11161c] border-l border-gray-800 transition-transform duration-200 overflow-hidden z-40 shadow-xl",
+          chatOpen ? "translate-x-0" : "translate-x-[360px]"
+        )}
+      >
+        <div className="h-full flex flex-col">
+          {/* Drawer header */}
+          <div className="px-4 py-3 border-b border-gray-800 bg-[#0f141b]/60 backdrop-blur-sm">
+            <h2 className="text-lg font-semibold tracking-wide">Chat</h2>
+            <p className="text-xs text-gray-500">Talk with others in this space</p>
+          </div>
+
+          {/* Chat messages list (scrollable) */}
+          <div className="flex-1 px-4 py-3 space-y-3 overflow-y-auto">
+            {chatLog.length === 0 && (
+              <div className="text-xs text-gray-500">No messages yet. Start the conversation!</div>
+            )}
+            {chatLog.map((c, i) => (
+              <div key={i} className="text-sm px-3 py-2 rounded-md bg-[#0f141b] border border-gray-800/60">
+                <span className="text-cyan-400 mr-2 font-mono">{c.userId}</span>
+                <span className="text-gray-300 break-words">{c.message}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Chat input + send button */}
+          <div className="p-3 border-t border-gray-800 bg-[#0f141b]/60 backdrop-blur-sm flex gap-2">
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Type a message..."
+              className="flex-1 px-3 py-2 rounded-md bg-[#151a21] border border-gray-800 outline-none focus:border-cyan-500 text-sm"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") sendChat();
+              }}
+            />
+            <Button className="bg-cyan-500 hover:bg-cyan-600 text-black font-semibold" onClick={sendChat}>
+              Send
+            </Button>
+          </div>
+        </div>
+      </aside>
     </div>
   );
 }
