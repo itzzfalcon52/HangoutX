@@ -1,240 +1,292 @@
 // JSX
-// filepath: /Users/hussain/Desktop/web dev projects/metaverse-app/metaverse-repo/apps/web/src/app/spaces/[spaceId]/page.jsx
-// ...existing code...
+// filepath: /Users/hussain/Desktop/web dev projects/metaverse-app/metaverse-repo/apps/web/src/app/admin/create-map/page.jsx
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
-
-import useWorldSocket from "@/hooks/use-world-socket";
-import useMovement from "@/hooks/use-movement";
-import PhaserWorld from "@/modules/world/components/PhaserWorld";
-import axios from "axios";
+import React, { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import Navbar from "@/modules/home/components/Navbar";
+import { createGame, destroyGame } from "@/modules/mapEditor/game-Logic/CreateGame";
+import { useElements, useImportElements } from "@/hooks/use-elements";
+import { useCreateMap, useUpdateMapElements } from "@/hooks/use-maps";
 import { useRequireAuth } from "@/hooks/use-protected-auth";
 
 /**
- * SpaceView:
- * - Full-screen world rendering with Phaser.
- * - WebSocket connection for presence and chat.
- * - Keyboard movement handling.
- * - Chat drawer overlay (hidden by default, slides over the map on demand).
- * 
- * All previous logic is preserved; only layout/styling and comments are enhanced.
+ * validatePlacements:
+ * - Pure validation utility, unchanged logic.
+ * - Confirms mapData exists, checks bounds, grid snapping, and element sizes against the map size and offset.
  */
-export default function SpaceView() {
-  // 1) Protect the route with auth (unchanged)
+function validatePlacements({ placements, mapData, tileSize }) {
+  const errors = [];
+  if (!mapData) return { ok: false, errors: ["Map data missing (data.json not loaded)."] };
+
+  const offsetX = mapData.x ?? 0;
+  const offsetY = mapData.y ?? 0;
+  const mapW = mapData.width ?? 0;
+  const mapH = mapData.height ?? 0;
+
+  if (!Number.isFinite(mapW) || !Number.isFinite(mapH) || mapW <= 0 || mapH <= 0) {
+    return { ok: false, errors: ["Invalid map width/height in data.json."] };
+  }
+
+  for (let i = 0; i < placements.length; i++) {
+    const p = placements[i];
+    if (!p?.elementId) errors.push(`Placement #${i + 1}: missing elementId`);
+    if (!Number.isFinite(p?.x) || !Number.isFinite(p?.y)) errors.push(`Placement #${i + 1}: invalid x/y`);
+
+    const relX = p.x - offsetX;
+    const relY = p.y - offsetY;
+    const snappedX = relX % tileSize === 0;
+    const snappedY = relY % tileSize === 0;
+    if (!snappedX || !snappedY) errors.push(`Placement #${i + 1}: not snapped to ${tileSize}px grid`);
+
+    const w = Number.isFinite(p?.width) ? p.width : 0;
+    const h = Number.isFinite(p?.height) ? p.height : 0;
+    const inside =
+      p.x >= offsetX &&
+      p.y >= offsetY &&
+      p.x + w <= offsetX + mapW &&
+      p.y + h <= offsetY + mapH;
+
+    if (!inside) errors.push(`Placement #${i + 1}: outside map bounds`);
+  }
+  return { ok: errors.length === 0, errors };
+}
+
+export default function AdminMapEditorPage() {
+  // Auth guard (unchanged)
   useRequireAuth();
+  const router = useRouter();
 
-  // 2) Read dynamic spaceId from URL
-  const params = useParams();
-  const spaceId = params?.spaceId;
+  // Editor state (unchanged)
+  const [placements, setPlacements] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [mapName, setMapName] = useState("");
 
-  // 3) JWT for WS auth, loaded from localStorage
-  const [token, setToken] = useState("");
+  // Data hooks (unchanged)
+  const importMutation = useImportElements();
+  const { data: elements = [], isLoading, isError } = useElements();
+  const createMapMutation = useCreateMap();
+  const updateMapElementsMutation = useUpdateMapElements();
+
+  // Static editor config (unchanged)
+  const mapKey = "map1";
+  const tileSize = 32;
+  const thumbnail = useMemo(() => `/${mapKey}/thumbnail.png`, [mapKey]);
+
+  // Boot Phaser editor (unchanged)
   useEffect(() => {
-    const t = localStorage.getItem("jwt");
-    console.log("🔐 Loaded token from localStorage:", t);
-    if (t) setToken(t);
+    createGame({ mapKey, tileSize, onPlacementsChanged: setPlacements });
+    return () => destroyGame();
   }, []);
 
-  // 4) Connect WS to backend (presence, movement, chat). Logic unchanged.
-  useWorldSocket(spaceId, token);
-
-  // 5) Enable keyboard movement and emit 'move' events over WS. Logic unchanged.
-  useMovement();
-
-  // 6) UI State: chat drawer visibility (hidden initially), chat buffer, input
-  const [chatOpen, setChatOpen] = useState(false); // start hidden
-  const [chatLog, setChatLog] = useState([]);
-  const [input, setInput] = useState("");
-
-  // 7) World data load state
-  const [world, setWorld] = useState(null);
-  const [loadingWorld, setLoadingWorld] = useState(true);
-
-  // 8) Fetch world (map + elements) via HTTP. Logic preserved.
+  // Elements load error toast (unchanged)
   useEffect(() => {
-    if (!spaceId) return;
-    setLoadingWorld(true);
+    if (isError) toast.error("Failed to load elements");
+  }, [isError]);
 
-    axios
-      .get(`${process.env.NEXT_PUBLIC_HHTP_URL}/api/v1/space/${spaceId}/world`, {
-        withCredentials: true,
-      })
-      .then((res) => {
-        setWorld(res.data);
-        setLoadingWorld(false);
-      })
-      .catch((err) => {
-        console.error("Failed to load world:", err);
-        setLoadingWorld(false);
-      });
-  }, [spaceId, token]);
+  /**
+   * Sidebar category toggle:
+   * - livingRoom | library
+   * - Filters elements based on folder path inside public/elements.
+   * - We also import per selected folder: /elements/livingRoom or /elements/library.
+   */
+  const [category, setCategory] = useState("livingRoom");
+  const deriveFolder = (el) => {
+    if (el.folder) return el.folder; // prefer explicit folder field if present
+    const url = el.imageUrl || "";
+    if (url.includes("/elements/livingRoom/")) return "livingRoom";
+    if (url.includes("/elements/library/")) return "library";
+    return "unknown";
+  };
+  const filtered = elements.filter((el) => deriveFolder(el) === category);
 
-  // 9) Chat WS listener (append messages to chatLog). Logic preserved.
-  useEffect(() => {
-    const ws = typeof window !== "undefined" ? window.__ws : null;
-    if (!ws) return;
-
-    const onMessage = (evt) => {
-      try {
-        const msg = JSON.parse(evt.data);
-        if (msg.type === "chat") {
-          const { userId, message, ts } = msg.payload || {};
-          setChatLog((prev) => [...prev, { userId, message, ts }]);
-        }
-      } catch {
-        // non-chat messages or parse issues are ignored
+  // Import only the selected folder (unchanged mutation usage)
+  const importSelectedFolder = () => {
+    const folder = `/elements/${category}`;
+    importMutation.mutate(
+      { folder, static: true },
+      {
+        onSuccess: (data) =>
+          toast.success(`Imported ${data?.count ?? 0} ${category} elements`),
+        onError: (e) => toast.error(e?.response?.data?.message || "Import failed"),
       }
-    };
-
-    ws.addEventListener("message", onMessage);
-    return () => ws.removeEventListener("message", onMessage);
-  }, [spaceId, token]);
-
-  // 10) Send chat over WS if open and text present. Logic preserved.
-  const sendChat = () => {
-    const ws = window?.__ws;
-    const text = input.trim();
-    if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
-
-    ws.send(JSON.stringify({ type: "chat", payload: { message: text } }));
-    setInput("");
+    );
   };
 
-  // 11) Share button: copy invite URL to clipboard. Logic preserved.
-  const [copied, setCopied] = useState(false);
-  const inviteUrl =
-    typeof window !== "undefined" ? `${window.location.origin}/spaces/${spaceId}` : "";
-  const copyInvite = async () => {
-    if (!inviteUrl) return;
+  // Save flow (unchanged)
+  const saveAndContinue = async () => {
+    if (!mapName.trim()) return toast.error("Map name is required");
+    if (!placements.length) return toast.error("Place at least one element before saving");
+
+    setSaving(true);
     try {
-      await navigator.clipboard.writeText(inviteUrl);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      const res = await fetch(`/${mapKey}/data.json`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`Failed to load /${mapKey}/data.json`);
+      const mapData = await res.json();
+
+      const validation = validatePlacements({ placements, mapData, tileSize });
+      if (!validation.ok) {
+        const sample = validation.errors.slice(0, 3).join(" | ");
+        toast.error(
+          `Fix placements: ${sample}${validation.errors.length > 3 ? ` (+${validation.errors.length - 3} more)` : ""}`
+        );
+        return;
+      }
+
+      const created = await createMapMutation.mutateAsync({
+        name: mapName.trim(),
+        width: mapData.width,
+        height: mapData.height,
+        tilemapJson: mapData,
+        thumbnail: `/${mapKey}/_composite.png`,
+      });
+
+      const mapId = created?.mapId;
+      if (!mapId) throw new Error("Create map did not return mapId");
+
+      await updateMapElementsMutation.mutateAsync({ mapId, placements });
+
+      toast.success("Map saved");
+      router.push("/admin/maps");
     } catch (e) {
-      console.warn("Failed to copy invite URL:", e);
+      toast.error(e?.response?.data?.message || e?.message || "Save failed");
+    } finally {
+      setSaving(false);
     }
   };
 
-  /**
-   * Render:
-   * - Full-screen container (fixed inset-0) so the map occupies the entire viewport.
-   * - Overlay controls and space ID indicators rendered above the map (absolute).
-   * - Chat drawer is hidden initially; when opened it overlays on top of the map (absolute, z-40).
-   */
+  const busy =
+    saving ||
+    importMutation.isPending ||
+    createMapMutation.isPending ||
+    updateMapElementsMutation.isPending;
+
   return (
-    <div className="fixed inset-0 bg-[#0b0f14] text-white overflow-hidden">
-      {/* World fills full screen */}
-      <main className="absolute inset-0">
-        {/* Controls (top-left) overlay above map */}
-        <div className="absolute top-3 left-3 z-30 flex gap-2">
-          <Button
-            variant="outline"
-            className="border-gray-700 text-gray-300 hover:bg-[#0f141b] hover:text-white transition-colors"
-            onClick={() => setChatOpen((o) => !o)}
-          >
-            {chatOpen ? "Hide Chat" : "Show Chat"}
-          </Button>
-          <Button
-            variant="outline"
-            className={cn(
-              "border-gray-700 transition-colors",
-              copied
-                ? "bg-green-600/20 text-green-300 hover:bg-green-600/30"
-                : "bg-[#0f141b] text-gray-300 hover:bg-[#121821] hover:text-white"
-            )}
-            onClick={copyInvite}
-            title={inviteUrl}
-          >
-            <span className="mr-2">🔗</span>
-            {copied ? "Copied!" : "Share"}
-          </Button>
-        </div>
+    // Root covers viewport; editor row fills remaining height to give Phaser full space
+    <div className="min-h-screen bg-[#0b0f14] text-white">
+      <Navbar />
 
-        {/* Space ID overlay (top-right) */}
-        <div className="absolute top-3 right-3 z-30">
-          <div className="px-3 py-2 rounded-md bg-[#0f141b] border border-gray-800 text-gray-300 text-sm shadow">
-            Space ID: <span className="text-cyan-400">{spaceId}</span>
-          </div>
-        </div>
-
-        {/* Phaser world canvas covers the entire screen */}
-        <div className="absolute inset-0">
-          {loadingWorld && (
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="flex flex-col items-center gap-3">
-                <div className="h-8 w-8 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin" />
-                <div className="text-gray-400">Loading world...</div>
-              </div>
+      {/* Full-width container; editor row height = viewport minus navbar height */}
+      <div className="w-full px-6 py-6">
+        {/* If your Navbar is ~64px high, this row fills the remaining viewport */}
+        <div className="flex gap-6 h-[calc(100vh-64px-48px)]">
+          {/* Sidebar: fixed width, scrollable, with category tabs */}
+          <aside className="w-[360px] bg-[#151a21] border border-gray-800 rounded-xl p-4 overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold">
+                Elements <span className="text-cyan-400">Palette</span>
+              </h2>
+              <button
+                onClick={importSelectedFolder}
+                disabled={busy}
+                className={`text-xs px-3 py-2 rounded-md border transition ${
+                  busy
+                    ? "border-gray-700 text-gray-400 cursor-not-allowed"
+                    : "border-cyan-500 text-cyan-400 hover:bg-cyan-500/10"
+                }`}
+                title={`Import from /public/elements/${category}`}
+              >
+                {importMutation.isPending ? "Importing..." : `Import ${category}`}
+              </button>
             </div>
-          )}
 
-          {/* Render the world when available; preserves prior logic */}
-          {!loadingWorld && world && <PhaserWorld map={world} />}
-
-          {/* Error state when world fails to load */}
-          {!loadingWorld && !world && (
-            <div className="w-full h-full flex items-center justify-center">
-              <div className="px-4 py-2 rounded-md bg-[#1a2029] border border-red-600/40 text-red-300">
-                Failed to load world
-              </div>
+            {/* Category toggle tabs */}
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => setCategory("livingRoom")}
+                className={`px-3 py-2 rounded-md text-xs border transition ${
+                  category === "livingRoom"
+                    ? "border-cyan-500 text-cyan-400 bg-cyan-500/10"
+                    : "border-gray-700 text-gray-400 hover:border-gray-500"
+                }`}
+              >
+                Living Room
+              </button>
+              <button
+                onClick={() => setCategory("library")}
+                className={`px-3 py-2 rounded-md text-xs border transition ${
+                  category === "library"
+                    ? "border-cyan-500 text-cyan-400 bg-cyan-500/10"
+                    : "border-gray-700 text-gray-400 hover:border-gray-500"
+                }`}
+              >
+                Library
+              </button>
             </div>
-          )}
-        </div>
-      </main>
 
-      {/* Chat drawer overlay:
-         - Hidden initially (translate-x fully off-screen).
-         - Slides in over the map when chatOpen=true.
-         - Absolute positioning with full height and a fixed width.
-         - z-40 ensures it sits on top of the map canvas and controls. */}
-      <aside
-        className={cn(
-          "absolute top-0 right-0 h-full w-[360px] bg-[#11161c] border-l border-gray-800 transition-transform duration-200 overflow-hidden z-40 shadow-xl",
-          chatOpen ? "translate-x-0" : "translate-x-[360px]"
-        )}
-      >
-        <div className="h-full flex flex-col">
-          {/* Drawer header */}
-          <div className="px-4 py-3 border-b border-gray-800 bg-[#0f141b]/60 backdrop-blur-sm">
-            <h2 className="text-lg font-semibold tracking-wide">Chat</h2>
-            <p className="text-xs text-gray-500">Talk with others in this space</p>
-          </div>
-
-          {/* Chat messages list (scrollable) */}
-          <div className="flex-1 px-4 py-3 space-y-3 overflow-y-auto">
-            {chatLog.length === 0 && (
-              <div className="text-xs text-gray-500">No messages yet. Start the conversation!</div>
-            )}
-            {chatLog.map((c, i) => (
-              <div key={i} className="text-sm px-3 py-2 rounded-md bg-[#0f141b] border border-gray-800/60">
-                <span className="text-cyan-400 mr-2 font-mono">{c.userId}</span>
-                <span className="text-gray-300 break-words">{c.message}</span>
-              </div>
-            ))}
-          </div>
-
-          {/* Chat input + send button */}
-          <div className="p-3 border-t border-gray-800 bg-[#0f141b]/60 backdrop-blur-sm flex gap-2">
+            {/* Map name input (unchanged) */}
+            <label className="block text-sm text-gray-300 mb-2">Map Name</label>
             <input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Type a message..."
-              className="flex-1 px-3 py-2 rounded-md bg-[#151a21] border border-gray-800 outline-none focus:border-cyan-500 text-sm"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") sendChat();
-              }}
+              value={mapName}
+              onChange={(e) => setMapName(e.target.value)}
+              placeholder="e.g. Level 0"
+              className="w-full mb-4 px-3 py-2 rounded-md bg-[#0b0f14] border border-gray-800 outline-none focus:border-cyan-500"
             />
-            <Button className="bg-cyan-500 hover:bg-cyan-600 text-black font-semibold" onClick={sendChat}>
-              Send
-            </Button>
-          </div>
+
+            {/* Elements list filtered by selected folder */}
+            {isLoading ? (
+              <div className="text-sm text-gray-400">Loading elements...</div>
+            ) : (
+              <div className="grid grid-cols-3 gap-3">
+                {filtered.map((el) => (
+                  <div
+                    key={el.id}
+                    onMouseDown={() => dragStart(el)}
+                    onMouseUp={dragEnd}
+                    className="bg-[#0b0f14] border border-gray-800 hover:border-cyan-500/60 rounded-lg p-2 cursor-grab active:cursor-grabbing transition"
+                  >
+                    <img
+                      src={el.imageUrl}
+                      alt=""
+                      className="w-full h-14 object-contain"
+                      draggable={false}
+                    />
+                    <div className="mt-2 text-[10px] text-gray-400 truncate">
+                      {el.width}×{el.height}
+                    </div>
+                  </div>
+                ))}
+                {!isLoading && filtered.length === 0 && (
+                  <div className="col-span-3 text-xs text-gray-500">
+                    No elements in “{category}”. Click “Import {category}” to load from /public/elements/{category}.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Save button (unchanged) */}
+            <button
+              onClick={saveAndContinue}
+              disabled={busy}
+              className={`mt-6 w-full py-3 rounded-lg font-semibold transition ${
+                busy ? "bg-gray-700 cursor-not-allowed" : "bg-cyan-500 hover:bg-cyan-600"
+              }`}
+            >
+              {busy ? "Saving..." : `Save & Continue (${placements.length})`}
+            </button>
+          </aside>
+
+          {/* Editor: fills remaining width and full available height */}
+          <main className="flex-1 bg-[#151a21] border border-gray-800 rounded-xl overflow-hidden flex flex-col h-full">
+            {/* Header (unchanged) */}
+            <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
+              <div className="font-semibold">
+                Map Editor: <span className="text-cyan-400">{mapKey}</span>
+              </div>
+              <div className="text-xs text-gray-400">Grid {tileSize}px</div>
+            </div>
+
+            {/* Canvas area: fills remaining height; Phaser reads container size */}
+            <div className="p-3 flex-1 min-h-0">
+              <div
+                id="game-container"
+                className="w-full h-full rounded-lg border border-gray-800 overflow-hidden"
+              />
+            </div>
+          </main>
         </div>
-      </aside>
+      </div>
     </div>
   );
 }
-// ...existing code...
