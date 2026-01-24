@@ -89,11 +89,11 @@ export default function AdminMapEditorPage() {
    * Sidebar category toggle:
    * - livingRoom | Library
    * - Filters elements based on folder path inside public/elements.
-   * - We also import per selected folder: /elements/livingRoom or /elements/Library.
+   * - Import per selected folder: /elements/livingRoom or /elements/Library.
    */
   const [category, setCategory] = useState("livingRoom");
   const deriveFolder = (el) => {
-    if (el.folder) return el.folder; // prefer explicit folder field if present
+    if (el.folder) return el.folder; // prefer explicit folder if present
     const url = el.imageUrl || "";
     if (url.includes("/elements/livingRoom/")) return "livingRoom";
     if (url.includes("/elements/Library/")) return "Library";
@@ -101,7 +101,7 @@ export default function AdminMapEditorPage() {
   };
   const filtered = elements.filter((el) => deriveFolder(el) === category);
 
-  // Drag handlers for palette items (fix: define these)
+  // Drag handlers for palette items (unchanged logic)
   const dragStart = (el) => {
     window.dispatchEvent(
       new CustomEvent("editor:dragstart", {
@@ -121,13 +121,12 @@ export default function AdminMapEditorPage() {
   // Import only the selected folder; refetch list after success; guard multiple clicks
   const importSelectedFolder = () => {
     if (importMutation.isPending) return;
-    const folder = `/elements/${category}`;
+    const folder = `/elements/${category}`; // resolves to /elements/livingRoom or /elements/Library
     importMutation.mutate(
       { folder, static: true },
       {
         onSuccess: async (data) => {
           toast.success(`Imported ${data?.count ?? 0} ${category} elements`);
-          // Refresh items so the sidebar reflects new imports
           try {
             await refetch();
           } catch {}
@@ -179,12 +178,11 @@ export default function AdminMapEditorPage() {
     }
   };
 
-  const busy =
-    saving ||
-    importMutation.isPending ||
-    createMapMutation.isPending ||
-    updateMapElementsMutation.isPending;
+  const importBusy = !!(importMutation.isPending || importMutation.isLoading);
+  const createBusy = !!(createMapMutation.isPending || createMapMutation.isLoading);
+  const updateBusy = !!(updateMapElementsMutation.isPending || updateMapElementsMutation.isLoading);
 
+  const busy = !!(saving || importBusy || createBusy || updateBusy);
   return (
     // Root covers viewport; editor row fills remaining height to give Phaser full space
     <div className="min-h-screen bg-[#0b0f14] text-white">

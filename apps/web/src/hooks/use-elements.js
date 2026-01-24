@@ -1,3 +1,5 @@
+// JavaScript
+// filepath: /Users/hussain/Desktop/web dev projects/metaverse-app/metaverse-repo/apps/web/src/hooks/use-elements.js
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -19,6 +21,7 @@ export function useImportElements() {
   const qc = useQueryClient();
 
   return useMutation({
+    // Client passes folder explicitly: "/elements/livingRoom" or "/elements/Library"
     mutationFn: async ({ folder = "/elements", static: isStatic = true } = {}) => {
       const res = await axios.post(
         `${API}/admin/elements/import`,
