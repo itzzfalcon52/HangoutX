@@ -65,7 +65,7 @@ export default function AdminMapEditorPage() {
 
   // Data hooks (unchanged)
   const importMutation = useImportElements();
-  const { data: elements = [], isLoading, isError } = useElements();
+  const { data: elements = [], isLoading, isError, refetch } = useElements();
   const createMapMutation = useCreateMap();
   const updateMapElementsMutation = useUpdateMapElements();
 
@@ -101,14 +101,37 @@ export default function AdminMapEditorPage() {
   };
   const filtered = elements.filter((el) => deriveFolder(el) === category);
 
-  // Import only the selected folder (unchanged mutation usage)
+  // Drag handlers for palette items (fix: define these)
+  const dragStart = (el) => {
+    window.dispatchEvent(
+      new CustomEvent("editor:dragstart", {
+        detail: {
+          elementId: el.id,
+          imageUrl: el.imageUrl,
+          width: el.width,
+          height: el.height,
+        },
+      })
+    );
+  };
+  const dragEnd = () => {
+    window.dispatchEvent(new CustomEvent("editor:dragend"));
+  };
+
+  // Import only the selected folder; refetch list after success; guard multiple clicks
   const importSelectedFolder = () => {
+    if (importMutation.isPending) return;
     const folder = `/elements/${category}`;
     importMutation.mutate(
       { folder, static: true },
       {
-        onSuccess: (data) =>
-          toast.success(`Imported ${data?.count ?? 0} ${category} elements`),
+        onSuccess: async (data) => {
+          toast.success(`Imported ${data?.count ?? 0} ${category} elements`);
+          // Refresh items so the sidebar reflects new imports
+          try {
+            await refetch();
+          } catch {}
+        },
         onError: (e) => toast.error(e?.response?.data?.message || "Import failed"),
       }
     );
@@ -169,7 +192,7 @@ export default function AdminMapEditorPage() {
 
       {/* Full-width container; editor row height = viewport minus navbar height */}
       <div className="w-full px-6 py-6">
-        {/* If your Navbar is ~64px high, this row fills the remaining viewport */}
+        {/* Fill remaining viewport height (adjust 64px if your Navbar height differs) */}
         <div className="flex gap-6 h-[calc(100vh-64px-48px)]">
           {/* Sidebar: fixed width, scrollable, with category tabs */}
           <aside className="w-[360px] bg-[#151a21] border border-gray-800 rounded-xl p-4 overflow-y-auto">
@@ -234,6 +257,7 @@ export default function AdminMapEditorPage() {
                     key={el.id}
                     onMouseDown={() => dragStart(el)}
                     onMouseUp={dragEnd}
+                    onMouseLeave={dragEnd}
                     className="bg-[#0b0f14] border border-gray-800 hover:border-cyan-500/60 rounded-lg p-2 cursor-grab active:cursor-grabbing transition"
                   >
                     <img
