@@ -136,29 +136,29 @@ export default function SpaceView() {
   //    - Attempts to send a lightweight "leave" message before closing (optional).
   //    - Clears the global window.__ws reference to avoid stale sockets.
   //    - Uses location.assign("/") to perform a hard navigation to home.
-  const leaveSpace = () => {
+   // ✅ Gracefully notify server, close socket, clear globals, and redirect to "/"
+   const leaveSpace = () => {
     try {
       const ws = typeof window !== "undefined" ? window.__ws : null;
 
-      // ✅ If a socket exists and is open or connecting, close it gracefully
       if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-        // Optional: inform server we are leaving (ignore errors)
+        // Inform server we are leaving so it can broadcast "user-left"
         try {
           ws.send(JSON.stringify({ type: "leave" }));
         } catch {}
 
-        // Close with a normal closure code and reason
+        // Close the socket normally
         ws.close(1000, "Client leaving space");
       }
 
-      // ✅ Remove global ref so any code relying on window.__ws won't reuse a closed socket
-      if (typeof window !== "undefined") {
-        window.__ws = null;
-      }
+      // Prevent further movement locally
+      window.__canMove = false;
+      // Clear global ref
+      window.__ws = null;
     } catch (e) {
       console.warn("leaveSpace: error while closing socket:", e);
     } finally {
-      // ✅ Redirect to home. If you prefer Next router, you can use router.push("/").
+      // Hard redirect to home
       window.location.assign("/");
     }
   };
