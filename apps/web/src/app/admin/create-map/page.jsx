@@ -118,6 +118,17 @@ export default function AdminMapEditorPage() {
     window.dispatchEvent(new CustomEvent("editor:dragend"));
   };
 
+  // ✅ NEW: Escape key cancels placement
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        dragEnd();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // Import only the selected folder; refetch list after success; guard multiple clicks
   const importSelectedFolder = () => {
     if (importMutation.isPending) return;
@@ -254,8 +265,6 @@ export default function AdminMapEditorPage() {
                   <div
                     key={el.id}
                     onMouseDown={() => dragStart(el)}
-                    onMouseUp={dragEnd}
-                    onMouseLeave={dragEnd}
                     className="bg-[#0b0f14] border border-gray-800 hover:border-cyan-500/60 rounded-lg p-2 cursor-grab active:cursor-grabbing transition"
                   >
                     <img
