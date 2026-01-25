@@ -1,5 +1,4 @@
-// ...existing code...
-// filepath: /Users/hussain/Desktop/web dev projects/metaverse-app/metaverse-repo/apps/ws/src/User.js
+
 // Importing WebSocket library for handling WebSocket connections
 import WebSocket from "ws";
 // Importing RoomManager to manage users and rooms
@@ -44,6 +43,76 @@ const STEP = 32;
     }
 
     // Method to initialize WebSocket event handlers
+    /**
+     * Initializes WebSocket event handlers for the user instance.
+     * This method listens for incoming WebSocket messages and processes them based on their type.
+     * It handles user authentication, room management, movement, chat, and WebRTC signaling.
+     *
+     * @method
+     * @description
+     * - This method is responsible for managing the lifecycle of a user's WebSocket connection.
+     * - It ensures that users are authenticated, added to the correct space, and can interact with other users.
+     * - It also facilitates WebRTC signaling for peer-to-peer communication between users.
+     *
+     * WebRTC Signaling:
+     * - The server acts as a signaling server for WebRTC connections.
+     * - It relays SDP offers, answers, and ICE candidates between peers to establish a direct connection.
+     * - Once the connection is established, media and data flow directly between peers without server involvement.
+     *
+     * Event Handlers:
+     * - `message`: Listens for incoming WebSocket messages and processes them based on their `type`.
+     *   - `join`: Authenticates the user, assigns them to a space, and initializes their position.
+     *   - `chat`: Broadcasts chat messages to other users in the same space.
+     *   - `move`: Updates the user's position and notifies other users in the space.
+     *   - `rtc-offer`: Relays WebRTC SDP offers to the target user.
+     *   - `rtc-answer`: Relays WebRTC SDP answers to the target user.
+     *   - `rtc-ice`: Relays WebRTC ICE candidates to the target user.
+     *
+     * @example
+     * // Example WebSocket message for joining a space:
+     * {
+     *   "type": "join",
+     *   "payload": {
+     *     "spaceId": "space123",
+     *     "token": "user-auth-token"
+     *   }
+     * }
+     *
+     * @example
+     * // Example WebSocket message for sending a chat:
+     * {
+     *   "type": "chat",
+     *   "payload": {
+     *     "message": "Hello, world!"
+     *   }
+     * }
+     *
+     * @example
+     * // Example WebRTC signaling messages:
+     * {
+     *   "type": "rtc-offer",
+     *   "payload": {
+     *     "toUserId": "user456",
+     *     "sdp": "session-description-protocol"
+     *   }
+     * }
+     *
+     * {
+     *   "type": "rtc-answer",
+     *   "payload": {
+     *     "toUserId": "user123",
+     *     "sdp": "session-description-protocol"
+     *   }
+     * }
+     *
+     * {
+     *   "type": "rtc-ice",
+     *   "payload": {
+     *     "toUserId": "user789",
+     *     "candidate": "ice-candidate"
+     *   }
+     * }
+     */
     initHandlers() {
         // Listening for "message" events from the WebSocket connection
         this.ws.on("message", async (data) => {
@@ -213,7 +282,9 @@ const STEP = 32;
                     }
                     break;
 
-                case "move":
+
+
+                case "move":{
                     // Extracting the new position (x, y) from the message payload
                     const moveX = parsedData.payload.x;
                     const moveY = parsedData.payload.y;
@@ -243,6 +314,19 @@ const STEP = 32;
                             type: "movement",
                             payload: { id: this.id, userId: this.userId, x: this.x, y: this.y, avatarKey: this.avatarKey }
                           });
+
+                        // This line retrieves the list of users in the current space (room) the user is in.
+                        // If the space ID does not exist in the RoomManager, it defaults to an empty array.
+                        // If you had done console.log(room), it would output an array of user objects in the room.
+                        const room = RoomManager.getInstance().rooms.get(this.spaceId) || [];
+                        for(const otherUser of room) {
+                            // You can perform operations with otherUser here if needed
+                            if(otherUser.id===this.id) continue;
+                            const close=RoomManager.getInstance().areClose(this.x, this.y, otherUser.x, otherUser.y,64);
+                            this.send({type:"proximity",payload:{withId:otherUser.id,close}});
+                            otherUser.send({type:"proximity",payload:{withId:this.id,close}});
+                        }
+
                           
                         return;
                     }
@@ -257,6 +341,59 @@ const STEP = 32;
                         }
                     });
                     console.log("MOVE REJECTED", this.x, this.y, "→", moveX, moveY);
+
+                    break;
+
+
+                }   
+
+                case "rtc-offer":{
+                    const {toUserId,sdp}=parsedData.payload || {};
+                    const room= RoomManager.getInstance().rooms.get(this.spaceId) || [];
+                    const targetUser=room.find(u=>u.userId===toUserId);
+                    if(targetUser){
+                        targetUser.send({
+                            type:"rtc-offer",
+                            payload:{
+                                fromUserId:this.userId,
+                                sdp
+                            }
+                        });
+                    }
+                    break;
+                }
+
+                case "rtc-answer":{
+                    const {toUserId,sdp}=parsedData.payload || {};
+                    const room= RoomManager.getInstance().rooms.get(this.spaceId) || [];
+                    const targetUser=room.find(u=>u.userId===toUserId);
+                    if(targetUser){
+                        targetUser.send({
+                            type:"rtc-answer",
+                            payload:{
+                                fromUserId:this.userId,
+                                sdp
+                            }
+                        });
+                    }
+                    break;
+                }
+
+                case "rtc-ice":{
+                    const {toUserId,candidate}=parsedData.payload || {};
+                    const room= RoomManager.getInstance().rooms.get(this.spaceId) || [];
+                    const targetUser=room.find(u=>u.userId===toUserId);
+                    if(targetUser){
+                        targetUser.send({
+                            type:"rtc-ice",
+                            payload:{
+                                fromUserId:this.userId,
+                                candidate
+                            }
+                        });
+                    }
+                    break;
+                }
             }
         });
     }
@@ -318,4 +455,3 @@ export default User;
 // 7. **Error Handling**:
 //    - Close the WebSocket connection if invalid data is received (e.g., invalid token).
 //    - Log errors or unexpected behavior for debugging.
-// ...existing code...

@@ -1,5 +1,3 @@
-// JSX
-// filepath: /Users/hussain/Desktop/web dev projects/metaverse-app/metaverse-repo/apps/web/src/app/(spcaes)/spaces/[spaceId]/page.jsx
 "use client";
 import React, { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
@@ -11,6 +9,8 @@ import useMovement from "@/hooks/use-movement";
 import PhaserWorld from "@/modules/world/components/PhaserWorld";
 import axios from "axios";
 import { useRequireAuth } from "@/hooks/use-protected-auth";
+// WebRTC hook: manages proximity detection (via WS), RTCPeerConnection lifecycle, and media streams
+import useWebRTC from "@/hooks/use-webrtc";
 
 /**
  * SpaceView renders a specific space by dynamic spaceId.
@@ -179,6 +179,16 @@ export default function SpaceView() {
     }
   };
 
+  // ===========================
+  // WebRTC integration (NEW)
+  // ===========================
+  // useWebRTC:
+  // - Subscribes to WS "proximity" events to know when a nearby peer is within threshold.
+  // - Manages RTCPeerConnection, offer/answer exchange, and ICE relay via WS ("rtc-offer", "rtc-answer", "rtc-ice").
+  // - Exposes local and remote MediaStreams for UI <video> elements.
+  // - startCall/endCall helpers to initiate and tear down the call.
+  const { nearUserId, localStream, remoteStream, callActive, startCall, endCall } = useWebRTC(spaceId, token);
+
   // Render full-page layout with world canvas and a sliding chat pane
   return (
     <div className="fixed inset-0 bg-[#0b0f14] text-white overflow-hidden">
@@ -208,6 +218,29 @@ export default function SpaceView() {
             <span className="mr-2">{"\u{1F6AA}"}</span>
             Leave Space
           </Button>
+
+          {/* WebRTC: show Call/End buttons based on proximity and call state */}
+          {/* When nearUserId is set (from WS "proximity"), allow initiating a call.
+              Buttons are lightweight controls; detailed video UI is on the right panel. */}
+          {nearUserId && !callActive && (
+            <Button
+              className="bg-cyan-500 hover:bg-cyan-600 text-black"
+              onClick={startCall}
+              title={`Start call with nearby user (${nearUserId})`}
+            >
+              Call
+            </Button>
+          )}
+          {callActive && (
+            <Button
+              variant="outline"
+              className="border-red-600/50 text-red-300"
+              onClick={endCall}
+              title="End current call"
+            >
+              End Call
+            </Button>
+          )}
         </div>
 
         {/* Top-right space id overlay */}
@@ -235,6 +268,62 @@ export default function SpaceView() {
               </div>
             </div>
           )}
+        </div>
+
+        {/* Right-side Video Call panel (NEW)
+            - Fixed panel that sits above the world canvas.
+            - Binds <video> elements to localStream and remoteStream provided by useWebRTC.
+            - Shows status based on proximity and call activity. */}
+        <div className="absolute top-0 right-0 h-full w-[420px] bg-[#0f141b]/80 border-l border-gray-800 z-40 flex flex-col">
+          <div className="px-4 py-3 border-b border-gray-800">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold">Video Call</h2>
+              <span className="text-xs text-gray-500">
+                {callActive ? "Connected" : nearUserId ? "Nearby user detected" : "No nearby user"}
+              </span>
+            </div>
+          </div>
+          <div className="flex-1 p-3 grid grid-cols-1 gap-3">
+            {/* Local video: muted to avoid audio feedback; bound dynamically to localStream */}
+            <video
+              autoPlay
+              muted
+              playsInline
+              className="w-full h-[38%] bg-black rounded border border-gray-800 object-cover"
+              ref={(el) => {
+                // Attach the MediaStream only when available to avoid null assignment
+                if (el && localStream) el.srcObject = localStream;
+              }}
+            />
+            {/* Remote video: renders the incoming peer stream */}
+            <video
+              autoPlay
+              playsInline
+              className="w-full h-[58%] bg-black rounded border border-gray-800 object-cover"
+              ref={(el) => {
+                if (el) el.srcObject = remoteStream;
+              }}
+            />
+          </div>
+          <div className="p-3 border-t border-gray-800 flex gap-2">
+            <Button
+              className="flex-1 bg-cyan-500 hover:bg-cyan-600 text-black"
+              onClick={startCall}
+              disabled={!nearUserId || callActive}
+              title="Start a call with the nearby user"
+            >
+              Start Call
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1 border-red-600/50 text-red-300"
+              onClick={endCall}
+              disabled={!callActive}
+              title="End the current call"
+            >
+              End
+            </Button>
+          </div>
         </div>
       </main>
 

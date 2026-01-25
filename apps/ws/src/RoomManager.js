@@ -70,6 +70,22 @@ class RoomManager {
           }
       });
   }
+
+/**
+ * Determines whether two points (A and B) are within a specified distance threshold.
+ *
+ * @param {number} ax - The x-coordinate of point A.
+ * @param {number} ay - The y-coordinate of point A.
+ * @param {number} bx - The x-coordinate of point B.
+ * @param {number} by - The y-coordinate of point B.
+ * @param {number} [threshold=64] - The distance threshold. Defaults to 64.
+ * @returns {boolean} - Returns `true` if the distance between the two points is less than or equal to the threshold, otherwise `false`.
+ */
+  areClose(ax, ay, bx, by, threshold = 64) {
+    const dx = ax - bx;
+    const dy = ay - by;
+    return dx * dx + dy * dy <= threshold * threshold;
+  }
 }
 
 // Exporting the RoomManager class as the default export for use in other modules.
