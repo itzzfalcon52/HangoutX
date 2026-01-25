@@ -1,4 +1,4 @@
-"use client";
+="use client";
 import React, { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import axios from "axios";
 import { useRequireAuth } from "@/hooks/use-protected-auth";
 // WebRTC hook: manages proximity detection (via WS), RTCPeerConnection lifecycle, and media streams
 import useWebRTC from "@/hooks/use-webrtc";
+import { Mic, MicOff, Video, VideoOff, MessageSquare, Link2, LogOut, Phone, PhoneOff } from "lucide-react";
 
 /**
  * SpaceView renders a specific space by dynamic spaceId.
@@ -187,21 +188,34 @@ export default function SpaceView() {
   // - Manages RTCPeerConnection, offer/answer exchange, and ICE relay via WS ("rtc-offer", "rtc-answer", "rtc-ice").
   // - Exposes local and remote MediaStreams for UI <video> elements.
   // - startCall/endCall helpers to initiate and tear down the call.
-  const { nearUserId, localStream, remoteStream, callActive, startCall, endCall } = useWebRTC(spaceId, token);
+  // - NEW: exposes micEnabled/camEnabled flags and toggle handlers for local media control.
+  const {
+    nearUserId,
+    localStream,
+    remoteStream,
+    callActive,
+    startCall,
+    endCall,
+    micEnabled,
+    camEnabled,
+    toggleMic,
+    toggleCam,
+  } = useWebRTC(spaceId, token);
 
   // Render full-page layout with world canvas and a sliding chat pane
   return (
-    <div className="fixed inset-0 bg-[#0b0f14] text-white overflow-hidden">
+    <div className="fixed inset-0 bg-gradient-to-br from-[#0a0e13] via-[#0b0f14] to-[#0d1117] text-white overflow-hidden">
       {/* World root */}
       <main className="absolute inset-0">
         {/* Top-left controls overlay */}
-        <div className="absolute top-3 left-3 z-30 flex gap-2">
+        <div className="absolute top-4 left-4 z-30 flex gap-3">
           {/* Toggle Chat drawer */}
           <Button
             variant="outline"
-            className="border-gray-700 text-gray-300 hover:bg-[#0f141b] hover:text-white transition-colors"
+            className="border-gray-700/60 bg-[#0f141b]/90 backdrop-blur-sm text-gray-200 hover:bg-[#151b24] hover:text-white hover:border-cyan-500/50 transition-all duration-200 shadow-lg"
             onClick={() => setChatOpen((o) => !o)}
           >
+            <MessageSquare size={16} className="mr-2" />
             {chatOpen ? "Hide Chat" : "Show Chat"}
           </Button>
 
@@ -211,11 +225,11 @@ export default function SpaceView() {
           {/* Leave Space: closes socket and navigates to home */}
           <Button
             variant="outline"
-            className="border-red-600/50 text-red-300 bg-[#0f141b] hover:bg-red-900/20 hover:text-red-200 transition-colors"
+            className="border-red-600/50 text-red-300 bg-[#0f141b]/90 backdrop-blur-sm hover:bg-red-900/30 hover:text-red-200 hover:border-red-500/70 transition-all duration-200 shadow-lg"
             onClick={leaveSpace}
             title="Leave this space"
           >
-            <span className="mr-2">{"\u{1F6AA}"}</span>
+            <LogOut size={16} className="mr-2" />
             Leave Space
           </Button>
 
@@ -224,29 +238,32 @@ export default function SpaceView() {
               Buttons are lightweight controls; detailed video UI is on the right panel. */}
           {nearUserId && !callActive && (
             <Button
-              className="bg-cyan-500 hover:bg-cyan-600 text-black"
+              className="bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-black font-semibold shadow-lg shadow-cyan-500/30 transition-all duration-200"
               onClick={startCall}
               title={`Start call with nearby user (${nearUserId})`}
             >
+              <Phone size={16} className="mr-2" />
               Call
             </Button>
           )}
           {callActive && (
             <Button
               variant="outline"
-              className="border-red-600/50 text-red-300"
+              className="border-red-600/50 text-red-300 bg-[#0f141b]/90 backdrop-blur-sm hover:bg-red-900/30 hover:border-red-500/70 transition-all duration-200 shadow-lg"
               onClick={endCall}
               title="End current call"
             >
+              <PhoneOff size={16} className="mr-2" />
               End Call
             </Button>
           )}
         </div>
 
         {/* Top-right space id overlay */}
-        <div className="absolute top-3 right-3 z-30">
-          <div className="px-3 py-2 rounded-md bg-[#0f141b] border border-gray-800 text-gray-300 text-sm shadow">
-            Space ID: <span className="text-cyan-400">{spaceId}</span>
+        <div className="absolute top-4 right-4 z-30">
+          <div className="px-4 py-2.5 rounded-lg bg-[#0f141b]/90 backdrop-blur-sm border border-gray-700/60 text-gray-200 text-sm shadow-lg">
+            <span className="text-gray-400 text-xs uppercase tracking-wider mr-2">Space ID:</span>
+            <span className="text-cyan-400 font-mono font-semibold">{spaceId}</span>
           </div>
         </div>
 
@@ -254,16 +271,16 @@ export default function SpaceView() {
         <div className="absolute inset-0">
           {loadingWorld && (
             <div className="w-full h-full flex items-center justify-center">
-              <div className="flex flex-col items-center gap-3">
-                <div className="h-8 w-8 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin" />
-                <div className="text-gray-400">Loading world...</div>
+              <div className="flex flex-col items-center gap-4">
+                <div className="h-10 w-10 rounded-full border-3 border-cyan-400 border-t-transparent animate-spin shadow-lg shadow-cyan-400/30" />
+                <div className="text-gray-300 text-base font-medium">Loading world...</div>
               </div>
             </div>
           )}
           {!loadingWorld && world && <PhaserWorld map={world} />}
           {!loadingWorld && !world && (
             <div className="w-full h-full flex items-center justify-center">
-              <div className="px-4 py-2 rounded-md bg-[#1a2029] border border-red-600/40 text-red-300">
+              <div className="px-6 py-3 rounded-lg bg-[#1a2029]/90 backdrop-blur-sm border border-red-600/50 text-red-300 shadow-lg">
                 Failed to load world
               </div>
             </div>
@@ -273,54 +290,135 @@ export default function SpaceView() {
         {/* Right-side Video Call panel (NEW)
             - Fixed panel that sits above the world canvas.
             - Binds <video> elements to localStream and remoteStream provided by useWebRTC.
-            - Shows status based on proximity and call activity. */}
-        <div className="absolute top-0 right-0 h-full w-[420px] bg-[#0f141b]/80 border-l border-gray-800 z-40 flex flex-col">
-          <div className="px-4 py-3 border-b border-gray-800">
+            - Shows status based on proximity and call activity.
+            - NEW: adds mic/camera toggle buttons beneath local video. */}
+        <div className="absolute top-0 right-0 h-full w-[420px] bg-[#0a0e13]/95 backdrop-blur-md border-l border-gray-700/50 z-40 flex flex-col shadow-2xl">
+          <div className="px-5 py-4 border-b border-gray-700/50 bg-gradient-to-r from-[#0f141b] to-[#12171f]">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold">Video Call</h2>
-              <span className="text-xs text-gray-500">
-                {callActive ? "Connected" : nearUserId ? "Nearby user detected" : "No nearby user"}
+              <h2 className="text-base font-bold tracking-tight">Video Call</h2>
+              <span className={cn(
+                "text-xs px-2.5 py-1 rounded-full font-medium",
+                callActive 
+                  ? "bg-green-500/20 text-green-300 border border-green-500/30" 
+                  : nearUserId 
+                  ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
+                  : "bg-gray-700/20 text-gray-400 border border-gray-700/30"
+              )}>
+                {callActive ? "● Connected" : nearUserId ? "● Nearby user" : "No nearby user"}
               </span>
             </div>
           </div>
-          <div className="flex-1 p-3 grid grid-cols-1 gap-3">
+          <div className="flex-1 p-4 grid grid-cols-1 gap-4">
             {/* Local video: muted to avoid audio feedback; bound dynamically to localStream */}
-            <video
-              autoPlay
-              muted
-              playsInline
-              className="w-full h-[38%] bg-black rounded border border-gray-800 object-cover"
-              ref={(el) => {
-                // Attach the MediaStream only when available to avoid null assignment
-                if (el && localStream) el.srcObject = localStream;
-              }}
-            />
+            <div className="relative group">
+              <video
+                autoPlay
+                muted
+                playsInline
+                className="w-full h-[38%] bg-black/90 rounded-xl border border-gray-700/50 object-cover shadow-xl transition-all duration-200 group-hover:border-cyan-500/50"
+                ref={(el) => {
+                  // Attach the MediaStream only when available to avoid null assignment
+                  if (el) el.srcObject = localStream || null;
+                }}
+              />
+              {!localStream && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-xl">
+                  <span className="text-gray-400 text-sm">No local video</span>
+                </div>
+              )}
+              {/* NEW: Local media controls (mic/cam) */}
+              <div className="mt-3 flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    "flex-1 border-gray-700/60 backdrop-blur-sm transition-all duration-200 shadow-md",
+                    micEnabled 
+                      ? "bg-[#0f141b]/90 text-gray-200 hover:bg-cyan-500/20 hover:border-cyan-500/50 hover:text-cyan-300" 
+                      : "bg-red-900/30 text-red-300 border-red-600/50 hover:bg-red-900/50"
+                  )}
+                  onClick={toggleMic}
+                  title={micEnabled ? "Mute microphone" : "Unmute microphone"}
+                  disabled={!callActive}
+                >
+                  {micEnabled ? <Mic size={16} className="mr-1.5" /> : <MicOff size={16} className="mr-1.5" />}
+                  <span className="text-xs">{micEnabled ? "Mic On" : "Mic Off"}</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn(
+                    "flex-1 border-gray-700/60 backdrop-blur-sm transition-all duration-200 shadow-md",
+                    camEnabled 
+                      ? "bg-[#0f141b]/90 text-gray-200 hover:bg-cyan-500/20 hover:border-cyan-500/50 hover:text-cyan-300" 
+                      : "bg-red-900/30 text-red-300 border-red-600/50 hover:bg-red-900/50"
+                  )}
+                  onClick={toggleCam}
+                  title={camEnabled ? "Turn off camera" : "Turn on camera"}
+                  disabled={!callActive}
+                >
+                  {camEnabled ? <Video size={16} className="mr-1.5" /> : <VideoOff size={16} className="mr-1.5" />}
+                  <span className="text-xs">{camEnabled ? "Cam On" : "Cam Off"}</span>
+                </Button>
+              </div>
+            </div>
+
             {/* Remote video: renders the incoming peer stream */}
-            <video
-              autoPlay
-              playsInline
-              className="w-full h-[58%] bg-black rounded border border-gray-800 object-cover"
-              ref={(el) => {
-                if (el) el.srcObject = remoteStream;
-              }}
-            />
+            <div className="relative group">
+              <video
+                autoPlay
+                playsInline
+                className="w-full h-[58%] bg-black/90 rounded-xl border border-gray-700/50 object-cover shadow-xl transition-all duration-200 group-hover:border-cyan-500/50"
+                ref={(el) => {
+                  if (el) el.srcObject = remoteStream || null;
+                }}
+              />
+              {(!remoteStream || remoteStream.getTracks().length === 0) && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-xl">
+                  <span className="text-gray-400 text-sm">Waiting for peer...</span>
+                </div>
+              )}
+              {/* NEW: Remote controls placeholder (non-interactive, indicates peer status if later exposed) */}
+              <div className="mt-3 flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="flex-1 border-gray-700/40 bg-[#0f141b]/60 text-gray-500 cursor-not-allowed opacity-60" 
+                  disabled
+                >
+                  <Mic size={16} className="mr-1.5" />
+                  <span className="text-xs">Peer Mic</span>
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="flex-1 border-gray-700/40 bg-[#0f141b]/60 text-gray-500 cursor-not-allowed opacity-60" 
+                  disabled
+                >
+                  <Video size={16} className="mr-1.5" />
+                  <span className="text-xs">Peer Cam</span>
+                </Button>
+              </div>
+            </div>
           </div>
-          <div className="p-3 border-t border-gray-800 flex gap-2">
+          <div className="p-4 border-t border-gray-700/50 bg-gradient-to-r from-[#0f141b] to-[#12171f] flex gap-3">
             <Button
-              className="flex-1 bg-cyan-500 hover:bg-cyan-600 text-black"
+              className="flex-1 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-black font-semibold shadow-lg shadow-cyan-500/30 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={startCall}
               disabled={!nearUserId || callActive}
               title="Start a call with the nearby user"
             >
+              <Phone size={16} className="mr-2" />
               Start Call
             </Button>
             <Button
               variant="outline"
-              className="flex-1 border-red-600/50 text-red-300"
+              className="flex-1 border-red-600/50 text-red-300 bg-[#0f141b]/90 hover:bg-red-900/30 hover:border-red-500/70 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
               onClick={endCall}
               disabled={!callActive}
               title="End the current call"
             >
+              <PhoneOff size={16} className="mr-2" />
               End
             </Button>
           </div>
@@ -330,56 +428,77 @@ export default function SpaceView() {
       {/* Chat overlay drawer */}
       <aside
         className={cn(
-          "absolute top-0 right-0 h-full w-[360px] bg-[#11161c] border-l border-gray-800 transition-transform duration-200 overflow-hidden z-40 shadow-xl",
+          "absolute top-0 right-0 h-full w-[360px] bg-[#0a0e13]/95 backdrop-blur-md border-l border-gray-700/50 transition-transform duration-300 ease-in-out overflow-hidden z-40 shadow-2xl",
           chatOpen ? "translate-x-0" : "translate-x-[360px]"
         )}
       >
         <div className="h-full flex flex-col">
           {/* Drawer header */}
-          <div className="px-4 py-3 border-b border-gray-800 bg-[#0f141b]/60 backdrop-blur-sm">
-            <h2 className="text-lg font-semibold tracking-wide">Chat</h2>
-            <p className="text-xs text-gray-500">Talk with others in this space</p>
+          <div className="px-5 py-4 border-b border-gray-700/50 bg-gradient-to-r from-[#0f141b] to-[#12171f]">
+            <h2 className="text-lg font-bold tracking-tight">Chat</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Talk with others in this space</p>
           </div>
 
           {/* Messages list */}
-          <div className="flex-1 px-4 py-3 space-y-3 overflow-y-auto">
+          <div className="flex-1 px-4 py-4 space-y-3 overflow-y-auto custom-scrollbar">
             {chatLog.length === 0 && (
-              <div className="text-xs text-gray-500">No messages yet. Start the conversation.</div>
+              <div className="text-xs text-gray-500 text-center py-8">
+                No messages yet. Start the conversation.
+              </div>
             )}
             {chatLog.map((c, i) => (
               <div
                 key={i}
                 className={cn(
-                  "text-sm px-3 py-2 rounded-md border",
+                  "text-sm px-4 py-2.5 rounded-lg border transition-all duration-150 hover:scale-[1.02]",
                   c.optimistic
-                    ? "bg-[#0f141b] border-yellow-600/40 text-yellow-200"
-                    : "bg-[#0f141b] border-gray-800/60 text-gray-300"
+                    ? "bg-yellow-500/10 border-yellow-600/40 text-yellow-200 shadow-sm"
+                    : "bg-[#0f141b]/80 border-gray-700/50 text-gray-200 shadow-md"
                 )}
                 title={c.optimistic ? "Pending delivery" : undefined}
               >
-                <span className="text-cyan-400 mr-2 font-mono">{c.userId}</span>
+                <span className="text-cyan-400 mr-2 font-mono text-xs font-semibold">{c.userId}</span>
                 <span className="break-words">{c.message}</span>
               </div>
             ))}
           </div>
 
           {/* Composer */}
-          <div className="p-3 border-t border-gray-800 bg-[#0f141b]/60 backdrop-blur-sm flex gap-2">
+          <div className="p-4 border-t border-gray-700/50 bg-gradient-to-r from-[#0f141b] to-[#12171f] flex gap-3">
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Type a message..."
-              className="flex-1 px-3 py-2 rounded-md bg-[#151a21] border border-gray-800 outline-none focus:border-cyan-500 text-sm"
+              className="flex-1 px-4 py-2.5 rounded-lg bg-[#151a21]/90 border border-gray-700/60 outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 text-sm transition-all duration-200 shadow-inner"
               onKeyDown={(e) => {
                 if (e.key === "Enter") sendChat();
               }}
             />
-            <Button className="bg-cyan-500 hover:bg-cyan-600 text-black font-semibold" onClick={sendChat}>
+            <Button 
+              className="bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-black font-semibold shadow-lg shadow-cyan-500/30 transition-all duration-200" 
+              onClick={sendChat}
+            >
               Send
             </Button>
           </div>
         </div>
       </aside>
+
+      <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(100, 116, 139, 0.3);
+          border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(100, 116, 139, 0.5);
+        }
+      `}</style>
     </div>
   );
 }
@@ -409,16 +528,16 @@ function ShareButton({ spaceId }) {
     <Button
       variant="outline"
       className={cn(
-        "border-gray-700 transition-colors",
+        "border-gray-700/60 backdrop-blur-sm transition-all duration-200 shadow-lg",
         copied
-          ? "bg-green-600/20 text-green-300 hover:bg-green-600/30"
-          : "bg-[#0f141b] text-gray-300 hover:bg-[#121821] hover:text-white"
+          ? "bg-green-500/20 text-green-300 border-green-500/50 hover:bg-green-500/30"
+          : "bg-[#0f141b]/90 text-gray-200 hover:bg-[#151b24] hover:text-white hover:border-cyan-500/50"
       )}
       onClick={copyInvite}
       title={inviteUrl}
     >
-      <span className="mr-2">Link</span>
-      {copied ? "Copied" : "Share"}
+      <Link2 size={16} className="mr-2" />
+      {copied ? "Copied!" : "Share"}
     </Button>
   );
 }

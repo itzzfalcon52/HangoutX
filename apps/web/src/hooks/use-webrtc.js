@@ -1,4 +1,3 @@
-
 import { useEffect,useRef,useState } from "react";
 import { toast } from "sonner";
 
@@ -8,6 +7,9 @@ export default function useWebRTC(spaceId,token){
   const [localStream,setLocalStream]=useState(null);
   const [remoteStream,setRemoteStream]=useState(new MediaStream());
   const [callActive,setCallActive]=useState(false);
+  // NEW: track local media state (mic/camera enable flags) so UI can toggle and we can apply to tracks
+  const [micEnabled,setMicEnabled]=useState(true);
+  const [camEnabled,setCamEnabled]=useState(true);
 
   useEffect(()=>{
     const ws=typeof window !=='undefined' ? window.__ws : null;
@@ -63,12 +65,15 @@ export default function useWebRTC(spaceId,token){
     return()=>{
         ws.removeEventListener("message",onMessage);
     }
-  },[spaceId,token,localStream,nearUserId]);
+  },[spaceId,token]); // NEW: stabilize deps to avoid re-registering listener on local state changes
 
   async function ensureLocalMedia(){
     if(localStream) return;
     try{
         const stream=await navigator.mediaDevices.getUserMedia({audio:true,video:true});
+        // NEW: apply current mic/cam enable flags to initial tracks so UI reflects state immediately
+        stream.getAudioTracks().forEach(t => t.enabled = micEnabled);
+        stream.getVideoTracks().forEach(t => t.enabled = camEnabled);
         setLocalStream(stream);
     }catch(e){
         console.error("Failed to get local media",e);
@@ -81,10 +86,14 @@ export default function useWebRTC(spaceId,token){
         if (pcRef.current) return pcRef.current;
         const pc = new RTCPeerConnection({ iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }] });
         pc.ontrack = (e) => {
-          e.streams[0]?.getTracks().forEach((t) => remoteStream.addTrack(t));
+          // NEW: when remote tracks arrive, replace remoteStream so <video> updates and avoids stale/frozen frames
+          const incoming = e.streams[0];
+          if (incoming) {
+            setRemoteStream(incoming);
+          }
         };
         pc.onicecandidate = (e) => {
-          if (e.candidate) {
+          if (e.candidate && window.__ws?.readyState === WebSocket.OPEN) {
             window.__ws?.send(JSON.stringify({ type: "rtc-ice", payload: { toUserId, candidate: e.candidate } }));
           }
         };
@@ -116,19 +125,46 @@ export default function useWebRTC(spaceId,token){
           setCallActive(true);
         }
       
-    function endCall() {
-          setCallActive(false);
-          try {
-            pcRef.current?.getSenders().forEach((s) => s.track?.stop());
-            pcRef.current?.close();
-          } catch {}
-          localStream?.getTracks().forEach((t) => t.stop());
-          pcRef.current = null;
-          setLocalStream(null);
-          setRemoteStream(new MediaStream());
-        }
-
-        return { nearUserId, localStream, remoteStream, callActive, startCall, endCall };
-    
-    
+        function endCall() {
+            setCallActive(false);
+            try {
+              // Stop and remove local tracks
+              localStream?.getTracks().forEach((t) => t.stop());
+              pcRef.current?.getSenders().forEach((s) => s.track && pcRef.current.removeTrack(s));
+              // Close peer
+              pcRef.current?.close();
+            } catch {}
+            // NEW: clear streams so <video> elements detach srcObject and don't show frozen last frame
+            setLocalStream(null);
+            setRemoteStream(new MediaStream());
+            // Reset peer ref
+            pcRef.current = null;
+          }
+        
+          // NEW: mic toggle - flips state and applies to current audio tracks
+          function toggleMic() {
+            const next = !micEnabled;
+            setMicEnabled(next);
+            localStream?.getAudioTracks().forEach(t => t.enabled = next);
+          }
+          // NEW: camera toggle - flips state and applies to current video tracks
+          function toggleCam() {
+            const next = !camEnabled;
+            setCamEnabled(next);
+            localStream?.getVideoTracks().forEach(t => t.enabled = next);
+          }
+        
+          return {
+            nearUserId,
+            localStream,
+            remoteStream,
+            callActive,
+            startCall,
+            endCall,
+            // NEW: expose mic/cam flags and toggles to UI
+            micEnabled,
+            camEnabled,
+            toggleMic,
+            toggleCam
+          };
 }
