@@ -24,7 +24,7 @@ export default function CreateSpacePage() {
     try {
       const res = await createSpace.mutateAsync({ name: name.trim(), mapId,thumbnail:maps.find(m=>m.id===mapId)?.thumbnail });
       toast.success("Space created");
-      router.push(`/spaces/${res.spaceId}/edit`);
+      router.push(`/spaces`);
     } catch (e) {
       toast.error(e?.response?.data?.message || "Failed to create space");
     }

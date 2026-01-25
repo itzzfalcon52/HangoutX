@@ -11,7 +11,7 @@ import db from "@repo/db"
 
 const router = express.Router();
 
-router.get("/maps", adminMiddleware, async (req, res) => {
+router.get("/maps", userMiddleware, async (req, res) => {
     try {
       const maps = await db.map.findMany({
         orderBy: { name: "asc" },
