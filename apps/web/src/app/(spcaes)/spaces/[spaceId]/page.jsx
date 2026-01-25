@@ -43,6 +43,8 @@ export default function SpaceView() {
 
   // UI state for chat drawer visibility
   const [chatOpen, setChatOpen] = useState(false);
+  // UI state for video call drawer visibility (NEW)
+  const [videoOpen, setVideoOpen] = useState(false);
   // Local chat log; entries are { userId, message, ts, optimistic?, nonce? }
   const [chatLog, setChatLog] = useState([]);
   // Chat input state
@@ -219,6 +221,16 @@ export default function SpaceView() {
             {chatOpen ? "Hide Chat" : "Show Chat"}
           </Button>
 
+          {/* Toggle Video Call drawer (NEW) */}
+          <Button
+            variant="outline"
+            className="border-gray-700/60 bg-[#0f141b]/90 backdrop-blur-sm text-gray-200 hover:bg-[#151b24] hover:text-white hover:border-cyan-500/50 transition-all duration-200 shadow-lg"
+            onClick={() => setVideoOpen((o) => !o)}
+          >
+            <Video size={16} className="mr-2" />
+            {videoOpen ? "Hide Video" : "Show Video"}
+          </Button>
+
           {/* Share current space URL */}
           <ShareButton spaceId={spaceId} />
 
@@ -287,12 +299,18 @@ export default function SpaceView() {
           )}
         </div>
 
-        {/* Right-side Video Call panel (NEW)
+        {/* Right-side Video Call panel (toggleable, NEW)
             - Fixed panel that sits above the world canvas.
             - Binds <video> elements to localStream and remoteStream provided by useWebRTC.
             - Shows status based on proximity and call activity.
-            - NEW: adds mic/camera toggle buttons beneath local video. */}
-        <div className="absolute top-0 right-0 h-full w-[420px] bg-[#0a0e13]/95 backdrop-blur-md border-l border-gray-700/50 z-40 flex flex-col shadow-2xl">
+            - NEW: adds mic/camera toggle buttons beneath local video.
+            - NEW: slides in/out based on videoOpen state */}
+        <aside
+          className={cn(
+            "absolute top-0 right-0 h-full w-[420px] bg-[#0a0e13]/95 backdrop-blur-md border-l border-gray-700/50 transition-transform duration-300 ease-in-out overflow-hidden z-40 shadow-2xl flex flex-col",
+            videoOpen ? "translate-x-0" : "translate-x-[420px]"
+          )}
+        >
           <div className="px-5 py-4 border-b border-gray-700/50 bg-gradient-to-r from-[#0f141b] to-[#12171f]">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-bold tracking-tight">Video Call</h2>
@@ -422,7 +440,7 @@ export default function SpaceView() {
               End
             </Button>
           </div>
-        </div>
+        </aside>
       </main>
 
       {/* Chat overlay drawer */}
