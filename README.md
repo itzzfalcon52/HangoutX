@@ -9,17 +9,7 @@
 👉 Backend API: https://api.hangoutx.space
 👉 WebSocket Server: wss://ws.hangoutx.space
 
-##  Test Login Credentials
 
-You can use the following test account to explore the platform:
-
-Username: falcon-0.12304315669971455
-Password: 123456
-
-
-> ⚠️ This is a public demo account. Please don’t change its password.
-
----
 
 
 ---
