@@ -206,7 +206,7 @@ if (elements.length > 0) {
 
   // Game loop: create sprites on first sight, then smooth-move + animate (unchanged)
   update() {
-    console.log("🎮 PLAYERS:", this.getPlayers(), "SELF:", this.getSelfId());
+    //console.log("🎮 PLAYERS:", this.getPlayers(), "SELF:", this.getSelfId());
     const playersRaw = this.getPlayers();
     const selfId = this.getSelfId();
     if (!playersRaw || !selfId) return;
@@ -231,6 +231,10 @@ if (elements.length > 0) {
         // logical movement target
         sprite.targetX = worldX;
         sprite.targetY = worldY;
+
+                
+        // Add animation state tracking
+        sprite.lastAnimState = 'idle';
       
         this.playerSprites.set(p.id, sprite);
       
@@ -280,18 +284,28 @@ if (elements.length > 0) {
       if (dirX < -0.5) sprite.setFlipX(true);
       else if (dirX > 0.5) sprite.setFlipX(false);
 
-      if (!arrived && vel > 0.2) {
-        if (
-          !sprite.anims.currentAnim ||
-          sprite.anims.currentAnim.key !== `walk:${p.avatarKey}`
-        ) {
-          sprite.play(`walk:${p.avatarKey}`, true);
-        }
-      } else {
-        if (sprite.anims.isPlaying) {
-          sprite.stop();
+       // Determine desired animation state
+       const isMoving = !arrived && vel > 0.2;
+       const desiredState = isMoving ? 'walking' : 'idle';
+
+      if (sprite.lastAnimState !== desiredState) {
+        if (desiredState === 'walking') {
+          // Check if animation exists before playing
+          if (this.anims.exists(`walk:${p.avatarKey}`)) {
+            sprite.play(`walk:${p.avatarKey}`, true);
+            console.log("▶️ Playing walk animation for", p.avatarKey);
+          } else {
+            console.warn("⚠️ Walk animation not found for", p.avatarKey);
+          }
+        } else {
+          // Stop animation and show idle
+          if (sprite.anims.isPlaying) {
+            sprite.stop();
+          }
           sprite.setTexture(`${p.avatarKey}:idle`);
+          console.log("⏸️ Stopped animation for", p.avatarKey);
         }
+        sprite.lastAnimState = desiredState;
       }
     }
     // Camera follow self left as-is (no behavioral change).
