@@ -332,9 +332,22 @@ if (elements.length > 0) {
 
   createWalkAnimation(avatarKey) {
     if (this.anims.exists(`walk:${avatarKey}`)) return;
+    
+    // Create frames array - Phaser expects 'key' and optionally 'frame'
     const frames = [];
-    for (let i = 0; i < 8; i++) frames.push({ key: `${avatarKey}:walk${i}` });
-    this.anims.create({ key: `walk:${avatarKey}`, frames, frameRate: 12, repeat: -1 });
-    console.log("🎞️ Animation created:", `walk:${avatarKey}`);
+    for (let i = 0; i < 8; i++) {
+      frames.push({ 
+        key: `${avatarKey}:walk${i}`, 
+        frame: 0  // Since these are single-image textures, frame is 0
+      });
+    }
+    
+    this.anims.create({ 
+      key: `walk:${avatarKey}`, 
+      frames: frames, 
+      frameRate: 12, 
+      repeat: -1 
+    });
+    console.log("🎞️ Animation created:", `walk:${avatarKey}`, frames);
   }
 }
